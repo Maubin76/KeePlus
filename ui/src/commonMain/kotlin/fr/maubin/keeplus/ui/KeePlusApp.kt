@@ -5,8 +5,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
 import fr.maubin.keeplus.ui.screens.CreateScreen
-import fr.maubin.keeplus.ui.screens.OpenedScreen
 import fr.maubin.keeplus.ui.screens.UnlockScreen
+import fr.maubin.keeplus.ui.screens.VaultScreen
 import fr.maubin.keeplus.ui.screens.WelcomeScreen
 import fr.maubin.keeplus.ui.theme.KeePlusTheme
 import kotlinx.coroutines.launch
@@ -57,7 +57,7 @@ fun KeePlusApp(inController: AppController)
 					inOnDone   = inController::open,
 					inOnDemo   = { vScope.launch { inController.openDemo() } }
 				)
-				is AppScreen.Opened -> OpenedScreen(vScreen.vault, vScreen.demo, inController::lock)
+				is AppScreen.Opened -> VaultScreen(inController, vScreen.vault, vScreen.demo)
 			}
 		}
 	}

@@ -3,12 +3,17 @@ package fr.maubin.keeplus.desktop
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.use
+import fr.maubin.keeplus.ui.AppController
+import fr.maubin.keeplus.ui.AppScreen
 import fr.maubin.keeplus.ui.screens.CreateScreen
 import fr.maubin.keeplus.ui.screens.HeroTitle
 import fr.maubin.keeplus.ui.screens.KeyScreen
 import fr.maubin.keeplus.ui.screens.UnlockScreen
+import fr.maubin.keeplus.ui.screens.VaultScreen
 import fr.maubin.keeplus.ui.screens.WelcomeScreen
 import fr.maubin.keeplus.ui.theme.KeePlusTheme
+import fr.maubin.keeplus.vault.VaultStore
+import kotlinx.coroutines.runBlocking
 import org.jetbrains.skia.EncodedImageFormat
 import org.junit.Test
 import java.io.File
@@ -51,5 +56,20 @@ class PreviewRenderTest
 		render("creation") { CreateScreen(null, false, {}, { _, _ -> null }, {}) }
 		render("deverrouillage") { UnlockScreen(null, "Mot de passe incorrect.", false, null, { null }, {}, {}) }
 		render("vague") { KeyScreen(inGlow = 0.35f) { HeroTitle("Déverrouillez\n", "votre ", "coffre.") } }
+	}
+
+	/*
+		Coffre de démonstration ouvert : liste seule, puis entrée choisie (fiche
+		en plein écran sur téléphone, troisième colonne sur PC).
+	*/
+	@Test
+	fun renderVault()
+	{
+		val vController = AppController(VaultStore(File("build/previews/absent.kdbx"))) { null }	// appli sans coffre
+		runBlocking { vController.openDemo() }
+		val vOpened = vController.screen as AppScreen.Opened										// démonstration ouverte
+		render("coffre") { VaultScreen(vController, vOpened.vault, true) }
+		vController.selected = vOpened.vault.items().first { it.title == "Société Générale" }.id
+		render("fiche") { VaultScreen(vController, vOpened.vault, true) }
 	}
 }

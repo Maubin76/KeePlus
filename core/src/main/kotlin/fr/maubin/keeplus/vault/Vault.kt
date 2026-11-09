@@ -172,13 +172,24 @@ class Vault(
 	}
 
 	/*
-		Entrées de la corbeille, triées par titre.
+		Entrées de la corbeille, triées par titre, filtrées comme search.
+		inQuery : texte cherché ; vide pour toute la corbeille
 	*/
-	fun trashItems(): List<VaultItem>
+	fun trashItems(inQuery: String = ""): List<VaultItem>
 	{
 		val vTrash = trashId?.let { root.findGroup(it) } ?: return emptyList()		// corbeille
-		return vTrash.placedEntries().map { (vGroup, vEntry) -> vEntry.toItem(vGroup) }.sortedWith(compareBy(fCollator) { it.title })
+		val vWords = normalized(inQuery).split(' ').filter { it.isNotBlank() }			// mots cherchés
+		return vTrash.placedEntries()
+			.filter { (_, vEntry) -> vWords.isEmpty() || searchText(vEntry).let { vText -> vWords.all { it in vText } } }
+			.map { (vGroup, vEntry) -> vEntry.toItem(vGroup) }
+			.sortedWith(compareBy(fCollator) { it.title })
 	}
+
+	/*
+		Nom d'un groupe ; null s'il n'existe pas.
+		inId : identifiant du groupe
+	*/
+	fun groupName(inId: UUID): String? = root.findGroup(inId)?.name
 
 	/*
 		Contenu complet d'une entrée ; null si elle n'existe pas.

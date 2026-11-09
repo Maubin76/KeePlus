@@ -1,5 +1,7 @@
 package fr.maubin.keeplus.ui
 
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.clearText
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -10,6 +12,7 @@ import fr.maubin.keeplus.vault.demoVault
 import fr.maubin.keeplus.vault.isKeePassFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.util.UUID
 
 /*
 	Fichier choisi par l'utilisateur (sélecteur du système).
@@ -31,6 +34,28 @@ fun interface VaultFiles
 		Demande à l'utilisateur de choisir un coffre .kdbx ; null s'il annule.
 	*/
 	suspend fun pickVault(): PickedFile?
+}
+
+/*
+	Filtre de la liste des entrées.
+*/
+sealed interface ListFilter
+{
+	/*
+		Tout le coffre, hors corbeille.
+	*/
+	data object All : ListFilter
+
+	/*
+		Un groupe et ses sous-groupes.
+		id : identifiant du groupe
+	*/
+	data class Group(val id: UUID) : ListFilter
+
+	/*
+		La corbeille.
+	*/
+	data object Trash : ListFilter
 }
 
 /*
@@ -101,18 +126,35 @@ class AppController(
 		private set
 
 	/*
-		Vrai si la touche Retour a un sens (création, reprise d'un coffre).
+		Texte cherché dans le coffre ouvert.
 	*/
-	val canGoBack: Boolean get() = screen == AppScreen.Create || screen is AppScreen.Import
+	val query = TextFieldState()
 
 	/*
-		Retour à l'accueil depuis la création ou la reprise d'un coffre.
+		Filtre de la liste : tout le coffre, un groupe ou la corbeille.
+	*/
+	var filter: ListFilter by mutableStateOf(ListFilter.All)
+
+	/*
+		Entrée affichée dans la fiche ; null pour aucune.
+	*/
+	var selected: UUID? by mutableStateOf(null)
+
+	/*
+		Vrai si la touche Retour a un sens : fermer la fiche, quitter la
+		création ou la reprise d'un coffre.
+	*/
+	val canGoBack: Boolean get() = screen == AppScreen.Create || screen is AppScreen.Import || (screen is AppScreen.Opened && selected != null)
+
+	/*
+		Retour : ferme la fiche ouverte, ou revient à l'accueil depuis la
+		création ou la reprise d'un coffre.
 	*/
 	fun back()
 	{
 		if (!canGoBack) return
-		error  = null
-		screen = AppScreen.Welcome
+		error = null
+		if (screen is AppScreen.Opened) selected = null else screen = AppScreen.Welcome
 	}
 
 	/*
@@ -208,8 +250,11 @@ class AppController(
 	fun lock()
 	{
 		val vOpened = screen as? AppScreen.Opened ?: return								// coffre ouvert
-		error  = null
-		screen = if (vOpened.demo && !fStore.exists()) AppScreen.Welcome else AppScreen.Locked
+		error    = null
+		selected = null
+		filter   = ListFilter.All
+		query.clearText()
+		screen   = if (vOpened.demo && !fStore.exists()) AppScreen.Welcome else AppScreen.Locked
 	}
 
 	/*

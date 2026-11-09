@@ -85,6 +85,60 @@ object LineIcons
 		"M11 6 L5 12 L11 18"
 	)
 
+	// Rechercher : loupe.
+	val Search: ImageVector = lineIcon(
+		"Rechercher",
+		"M4.5 10.5 a6 6 0 1 0 12 0 a6 6 0 1 0 -12 0",
+		"M15 15 L20 20"
+	)
+
+	// Copier : deux feuilles décalées.
+	val Copy: ImageVector = lineIcon(
+		"Copier",
+		"M9.5 8.5 H18 A1.5 1.5 0 0 1 19.5 10 V18.5 A1.5 1.5 0 0 1 18 20 H9.5 A1.5 1.5 0 0 1 8 18.5 V10 A1.5 1.5 0 0 1 9.5 8.5 Z",
+		"M16 8.5 V6 A1.5 1.5 0 0 0 14.5 4.5 H6 A1.5 1.5 0 0 0 4.5 6 V14.5 A1.5 1.5 0 0 0 6 16 H8"
+	)
+
+	// Fermer : croix.
+	val Close: ImageVector = lineIcon(
+		"Fermer",
+		"M6 6 L18 18",
+		"M18 6 L6 18"
+	)
+
+	// Ouvrir le site : flèche sortant d'un cadre.
+	val External: ImageVector = lineIcon(
+		"Ouvrir",
+		"M13.5 4.5 H19.5 V10.5",
+		"M19.5 4.5 L11 13",
+		"M17.5 13.5 V18 A1.5 1.5 0 0 1 16 19.5 H6 A1.5 1.5 0 0 1 4.5 18 V8 A1.5 1.5 0 0 1 6 6.5 H10.5"
+	)
+
+	// Tout : quatre cases.
+	val All: ImageVector = lineIcon(
+		"Tout",
+		"M5 4.5 H10 V9.5 H5 Z",
+		"M14 4.5 H19 V9.5 H14 Z",
+		"M5 14.5 H10 V19.5 H5 Z",
+		"M14 14.5 H19 V19.5 H14 Z"
+	)
+
+	// Groupe : dossier.
+	val Folder: ImageVector = lineIcon(
+		"Groupe",
+		"M4 7 A1.5 1.5 0 0 1 5.5 5.5 H9.5 L11.5 7.5 H18.5 A1.5 1.5 0 0 1 20 9 V17.5 A1.5 1.5 0 0 1 18.5 19 H5.5 A1.5 1.5 0 0 1 4 17.5 Z"
+	)
+
+	// Corbeille.
+	val Trash: ImageVector = lineIcon(
+		"Corbeille",
+		"M4.5 7 H19.5",
+		"M9.5 7 V5 H14.5 V7",
+		"M6.5 7 L7.5 19 A1.5 1.5 0 0 0 9 20.5 H15 A1.5 1.5 0 0 0 16.5 19 L17.5 7",
+		"M10.5 11 V16.5",
+		"M13.5 11 V16.5"
+	)
+
 	// Attention : cercle et point d'exclamation.
 	val Alert: ImageVector = lineIcon(
 		"Attention",
