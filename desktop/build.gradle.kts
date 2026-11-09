@@ -26,6 +26,7 @@ dependencies {
 	implementation(compose.desktop.currentOs)
 	implementation(libs.compose.desktop.material3)
 	implementation(libs.kotlinx.coroutines.swing)
+	implementation(libs.jna.platform)													// barre de titre sombre, premier plan, verrouillage de session (Windows)
 
 	testImplementation(libs.junit)
 	testImplementation(libs.kotlinx.coroutines.core)
@@ -48,6 +49,7 @@ compose.desktop {
 			modules("java.instrument", "jdk.unsupported", "java.xml", "jdk.localedata")
 
 			windows {
+				iconFile.set(project.file("icons/keeplus.ico"))
 				menuGroup = "KeePlus"
 			}
 		}

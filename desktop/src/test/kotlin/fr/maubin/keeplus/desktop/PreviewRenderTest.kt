@@ -2,6 +2,7 @@ package fr.maubin.keeplus.desktop
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.ImageComposeScene
+import androidx.compose.ui.graphics.asSkiaBitmap
 import androidx.compose.ui.use
 import fr.maubin.keeplus.ui.AppController
 import fr.maubin.keeplus.ui.AppScreen
@@ -12,9 +13,11 @@ import fr.maubin.keeplus.ui.screens.UnlockScreen
 import fr.maubin.keeplus.ui.screens.VaultScreen
 import fr.maubin.keeplus.ui.screens.WelcomeScreen
 import fr.maubin.keeplus.ui.theme.KeePlusTheme
+import fr.maubin.keeplus.ui.theme.logoImage
 import fr.maubin.keeplus.vault.VaultStore
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.skia.EncodedImageFormat
+import org.jetbrains.skia.Image
 import org.junit.Test
 import java.io.File
 
@@ -44,6 +47,17 @@ class PreviewRenderTest
 				File(vDir, "$inName-$vFormat.png").writeBytes(vImage.encodeToData(EncodedImageFormat.PNG)!!.bytes)
 			}
 		}
+	}
+
+	/*
+		Logo en PNG (256 px), source de l'icône Windows (icons/keeplus.ico).
+	*/
+	@Test
+	fun renderLogo()
+	{
+		val vDir = File("build/previews").apply { mkdirs() }									// dossier des rendus
+		val vPng = Image.makeFromBitmap(logoImage(256).asSkiaBitmap()).encodeToData(EncodedImageFormat.PNG)!!.bytes	// logo encodé
+		File(vDir, "logo-256.png").writeBytes(vPng)
 	}
 
 	/*

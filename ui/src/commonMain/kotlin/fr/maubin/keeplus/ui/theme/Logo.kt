@@ -12,11 +12,16 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathFillType
+import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 
 /*
@@ -68,7 +73,7 @@ fun shieldPath(
 /*
 	Carré arrondi argenté portant le bouclier en noir.
 */
-private fun DrawScope.drawLogo()
+internal fun DrawScope.drawLogo()
 {
 	val vSide = size.minDimension															// côté du carré
 	drawRoundRect(
@@ -78,6 +83,17 @@ private fun DrawScope.drawLogo()
 	)
 	val vInset = vSide * 0.18f																// marge du bouclier
 	drawPath(shieldPath(vSide - 2 * vInset, Offset(vInset, vInset)), Color(0xFF0B0B0C))
+}
+
+/*
+	Logo de KeePlus en image (icône de fenêtre, zone de notification).
+	inSize : côté de l'image, en pixels
+*/
+fun logoImage(inSize: Int): ImageBitmap
+{
+	val vImage = ImageBitmap(inSize, inSize)													// image
+	CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(vImage), Size(inSize.toFloat(), inSize.toFloat())) { drawLogo() }
+	return vImage
 }
 
 /*

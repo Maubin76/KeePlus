@@ -9,6 +9,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -31,6 +32,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.input.clearText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
@@ -44,9 +46,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import fr.maubin.keeplus.ui.AppController
@@ -108,6 +121,10 @@ class CopyActions(
 	Coffre ouvert : en 3 colonnes (groupes, liste, fiche ou édition) sur un
 	écran large, sinon liste, puis fiche ou édition en plein écran. Bandeau
 	de confirmation des copies et des actions ; état de l'enregistrement.
+	Raccourcis clavier (PC, ou clavier branché au téléphone) :
+	Ctrl+F rechercher, Ctrl+N nouvelle entrée, Ctrl+E modifier, Ctrl+B copier
+	l'identifiant, Ctrl+Maj+C copier le mot de passe, Ctrl+U ouvrir le site,
+	Ctrl+L verrouiller, Échap annuler ou fermer.
 	inController : état de l'appli
 	inVault      : coffre ouvert
 	inDemo       : coffre de démonstration
@@ -143,9 +160,53 @@ fun VaultScreen(
 			ListFilter.Trash    -> inVault.trashItems(vQuery)
 		}
 	}																						// entrées affichées
-	BoxWithConstraints(Modifier.fillMaxSize().background(KeeColors.ground)) {
-		if (maxWidth >= kWideMin) WideVault(inController, inVault, inDemo, vItems, vCopy, vActions)
-		else CompactVault(inController, inVault, inDemo, vItems, vCopy, vActions)
+	val vSearch  = remember { FocusRequester() }												// focus de la recherche
+	val vRoot    = remember { FocusRequester() }												// focus de l'écran (raccourcis)
+	val vUri     = LocalUriHandler.current														// ouverture des liens
+	LaunchedEffect(Unit) { runCatching { vRoot.requestFocus() } }
+	/*
+		Raccourci clavier ; vrai s'il a été traité.
+		inEvent : touche
+	*/
+	fun shortcut(inEvent: KeyEvent): Boolean
+	{
+		if (inEvent.type != KeyEventType.KeyDown) return false
+		val vDraft = inController.selected?.let { inVault.draft(it) }							// entrée choisie
+		if (inEvent.key == Key.Escape)
+		{
+			when
+			{
+				inController.editing != null              -> inController.cancelEdit()
+				inController.query.text.isNotEmpty()      -> inController.query.clearText()
+				inController.selected != null             -> inController.selected = null
+				else                                      -> return false
+			}
+			return true
+		}
+		if (!inEvent.isCtrlPressed) return false
+		when (inEvent.key)
+		{
+			Key.F -> runCatching { vSearch.requestFocus() }
+			Key.N -> if (inController.editing == null) inController.startNew()
+			Key.L -> inController.lock()
+			Key.E -> if (vDraft != null && inController.editing == null) inController.startEdit(vDraft.id!!)
+			Key.B -> if (vDraft != null) vCopy.copy("Identifiant", vDraft.userName, false)
+			Key.C -> if (inEvent.isShiftPressed && vDraft != null) vCopy.copy("Mot de passe", vDraft.password, true) else return false
+			Key.U -> if (vDraft != null && vDraft.url.isNotBlank()) runCatching { vUri.openUri(if ("://" in vDraft.url) vDraft.url else "https://${vDraft.url}") }
+			else  -> return false
+		}
+		return true
+	}
+	BoxWithConstraints(
+		Modifier
+			.fillMaxSize()
+			.background(KeeColors.ground)
+			.onPreviewKeyEvent { shortcut(it) }
+			.focusRequester(vRoot)
+			.focusable()
+	) {
+		if (maxWidth >= kWideMin) WideVault(inController, inVault, inDemo, vItems, vCopy, vActions, vSearch)
+		else CompactVault(inController, inVault, inDemo, vItems, vCopy, vActions, vSearch)
 		Notice(inController.saveError ?: vNotice, Modifier.align(Alignment.BottomCenter).safeDrawingPadding().padding(bottom = 24.dp))
 	}
 }
@@ -184,7 +245,8 @@ private fun CompactVault(
 	inDemo       : Boolean,
 	inItems      : List<VaultItem>,
 	inCopy       : CopyActions,
-	inActions    : EntryActions
+	inActions    : EntryActions,
+	inSearch     : FocusRequester
 )
 {
 	val vEditing  = inController.editing														// entrée en édition
@@ -220,7 +282,7 @@ private fun CompactVault(
 						IconAction(LineIcons.Lock, "Verrouiller", inController::lock, inTint = KeeColors.text)
 					}
 					if (inDemo) DemoBadge(Modifier.padding(start = 20.dp, top = 4.dp))
-					SearchField(inController.query, Modifier.padding(horizontal = 16.dp, vertical = 12.dp))
+					SearchField(inController.query, Modifier.padding(horizontal = 16.dp, vertical = 12.dp).focusRequester(inSearch))
 					GroupPills(inController, inVault)
 					EntryList(inVault, inItems, null, inController, inCopy, emptyText(inController, inVault), PaddingValues(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 112.dp))
 				}
@@ -244,7 +306,8 @@ private fun WideVault(
 	inDemo       : Boolean,
 	inItems      : List<VaultItem>,
 	inCopy       : CopyActions,
-	inActions    : EntryActions
+	inActions    : EntryActions,
+	inSearch     : FocusRequester
 )
 {
 	Row(Modifier.fillMaxSize()) {
@@ -256,7 +319,7 @@ private fun WideVault(
 				.background(KeeColors.ground)
 		) {
 			Row(Modifier.padding(start = 16.dp, end = 12.dp, top = 20.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-				SearchField(inController.query, Modifier.weight(1f))
+				SearchField(inController.query, Modifier.weight(1f).focusRequester(inSearch))
 				Spacer(Modifier.width(8.dp))
 				AddButton(inController::startNew, inCompact = true)
 			}
