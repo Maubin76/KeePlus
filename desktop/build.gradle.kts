@@ -28,6 +28,7 @@ dependencies {
 	implementation(libs.kotlinx.coroutines.swing)
 
 	testImplementation(libs.junit)
+	testImplementation(libs.kotlinx.coroutines.core)
 }
 
 // Version commune aux deux applis ; le paquet Windows veut trois nombres (0.1 → 0.1.0).

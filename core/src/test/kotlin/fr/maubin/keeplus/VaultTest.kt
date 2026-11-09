@@ -149,6 +149,23 @@ class VaultTest
 	}
 
 	/*
+		Coffre de démonstration : cinq groupes, dix-sept entrées hors
+		corbeille, une à la corbeille, un historique ; s'ouvre avec son mot de
+		passe après chiffrement.
+	*/
+	@Test
+	fun demoVaultContent()
+	{
+		val vDemo   = fr.maubin.keeplus.vault.demoVault()										// coffre de démonstration
+		val vReread = Vault(decodeVault(encodeVault(vDemo.database), fr.maubin.keeplus.vault.kDemoPassword))	// relu
+		assertEquals(listOf("Personnel", "Banques", "Travail", "Achats", "Loisirs"), vReread.groups().map { it.name })
+		assertEquals(17, vReread.items().size)
+		assertEquals(listOf("Ancien forum"), vReread.trashItems().map { it.title })
+		val vGmail  = vReread.items().single { it.title == "Gmail" }							// entrée avec historique
+		assertEquals(1, vReread.history(vGmail.id).size)
+	}
+
+	/*
 		Un groupe mis à la corbeille emporte son contenu.
 	*/
 	@Test
