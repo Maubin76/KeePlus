@@ -141,6 +141,21 @@ fun SettingsScreen(
 			}
 		}
 
+		inController.updates?.let { vUpdates ->
+			var vMessage by remember { mutableStateOf<String?>(null) }							// résultat de la vérification
+			SettingsSection("Mises à jour") {
+				BasicText("Version installée : ${vUpdates.version ?: "inconnue (version de développement)"}", style = vType.body)
+				BasicText("Chercher une nouvelle version au lancement", style = vType.bodySmall)
+				Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+					FilterPill("Au lancement", vSettings.updates) { inController.updateSettings(vSettings.copy(updates = true)) }
+					FilterPill("Jamais", !vSettings.updates) { inController.updateSettings(vSettings.copy(updates = false)) }
+				}
+				vMessage?.let { BasicText(it, style = vType.bodySmall) }
+				GhostButton("Vérifier maintenant", { vMessage = null; vUpdates.checkNow { vMessage = it } })
+				BasicText("Les versions sont publiées sur GitHub ; seule l'adresse IP de l'appareil est connue de GitHub lors de la vérification.", style = vType.bodySmall.copy(color = KeeColors.textFaint))
+			}
+		}
+
 		inExtra?.let { vExtra -> Column(verticalArrangement = Arrangement.spacedBy(22.dp)) { vExtra() } }
 
 		SettingsSection("À propos") {

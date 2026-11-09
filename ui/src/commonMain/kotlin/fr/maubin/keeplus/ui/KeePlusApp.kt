@@ -18,6 +18,7 @@ import fr.maubin.keeplus.ui.screens.UnlockScreen
 import fr.maubin.keeplus.ui.screens.VaultScreen
 import fr.maubin.keeplus.ui.screens.WelcomeScreen
 import fr.maubin.keeplus.ui.theme.KeePlusTheme
+import fr.maubin.keeplus.ui.update.UpdateDialog
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -26,7 +27,7 @@ import kotlinx.coroutines.launch
 	écrans selon l'état de l'appli, en fondu. Chaque geste (toucher, souris,
 	clavier) repousse le verrouillage automatique, vérifié chaque seconde.
 	À l'ouverture du coffre, les coffres d'autres appareils en attente sont
-	fusionnés.
+	fusionnés, puis une nouvelle version de l'appli est cherchée (une fois).
 	inController : état de l'appli
 	inSettings   : réglages propres à la plateforme, ajoutés à la page Réglages ; null sans
 	inDevices    : écran des appareils (synchronisation), propre à la plateforme ; null sans
@@ -47,7 +48,11 @@ fun KeePlusApp(
 		}
 	}
 	val vOpened = inController.screen is AppScreen.Opened										// coffre ouvert
-	LaunchedEffect(vOpened) { if (vOpened) inController.mergePending() }
+	LaunchedEffect(vOpened) {
+		if (!vOpened) return@LaunchedEffect
+		inController.mergePending()
+		inController.updates?.checkAtLaunch()
+	}
 	KeePlusTheme {
 		Box(
 			Modifier
@@ -104,6 +109,7 @@ fun KeePlusApp(
 					is AppScreen.Opened -> VaultScreen(inController, vScreen.vault, vScreen.demo, inDevices, inSettings)
 				}
 			}
+			if (vOpened && !inController.introPlaying && !inController.offerBiometric) inController.updates?.let { UpdateDialog(it) }
 			if (inController.offerBiometric && inController.screen is AppScreen.Opened)
 			{
 				BiometricOfferDialog(

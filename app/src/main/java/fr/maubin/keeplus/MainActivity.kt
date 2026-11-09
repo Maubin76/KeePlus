@@ -80,7 +80,14 @@ class MainActivity : FragmentActivity(), VaultFiles
 		window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
 		enableEdgeToEdge(SystemBarStyle.dark(android.graphics.Color.TRANSPARENT), SystemBarStyle.dark(android.graphics.Color.TRANSPARENT))
 		fSync       = AndroidSync.get(this)
-		fController = AppController(fSync.fStore, this, AndroidBiometric(this), fSync = fSync, fSettings = SettingsStore(File(filesDir, "reglages.json")))
+		fController = AppController(
+			fStore     = fSync.fStore,
+			fFiles     = this,
+			fBiometric = AndroidBiometric(this),
+			fSync      = fSync,
+			fSettings  = SettingsStore(File(filesDir, "reglages.json")),
+			fUpdater   = AndroidUpdateInstaller(applicationContext)
+		)
 		registerReceiver(fScreenOff, IntentFilter(Intent.ACTION_SCREEN_OFF))
 		scheduleSync(this)
 		lifecycleScope.launch {
@@ -113,6 +120,16 @@ class MainActivity : FragmentActivity(), VaultFiles
 		super.onStart()
 		fController.setHidden(false)
 		fSync.syncSoon()
+	}
+
+	/*
+		Retour à l'appli (écran d'autorisation d'installer, par exemple) : une
+		mise à jour qui attendait l'autorisation reprend.
+	*/
+	override fun onResume()
+	{
+		super.onResume()
+		fController.updates?.onResume()
 	}
 
 	/*

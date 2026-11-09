@@ -74,6 +74,31 @@ class PreviewRenderTest
 	}
 
 	/*
+		Fenêtre « nouvelle version disponible », par-dessus le coffre de démonstration.
+	*/
+	@Test
+	fun renderUpdateDialog()
+	{
+		val vRelease = fr.maubin.keeplus.update.Release("1.1", 2, listOf(fr.maubin.keeplus.update.ReleaseAsset("KeePlus-1.1-windows.zip", 78_000_000, "http://127.0.0.1/", null)))	// release simulée
+		val vManager = fr.maubin.keeplus.ui.update.UpdateManager(
+			object : fr.maubin.keeplus.ui.update.UpdateInstaller
+			{
+				override val platform = fr.maubin.keeplus.update.UpdatePlatform.WINDOWS
+				override val version  = "1.0"
+				override val autoCheck = true
+				override val notice: String? = null
+				override val action   = "Mettre à jour"
+				override fun target(inAsset: fr.maubin.keeplus.update.ReleaseAsset) = File("build/tmp/maj.zip")
+				override suspend fun install(inFile: File) = fr.maubin.keeplus.ui.update.InstallStep.Started
+			},
+			{ true }, { "" }, {}, { vRelease }
+		)																						// mises à jour simulées
+		vManager.checkNow {}
+		runBlocking { kotlinx.coroutines.withTimeout(5_000) { while (vManager.state == null) kotlinx.coroutines.delay(20) } }
+		render("mise-a-jour") { fr.maubin.keeplus.ui.update.UpdateDialog(vManager) }
+	}
+
+	/*
 		Accueil, création, déverrouillage (avec une erreur) et vague de la grille.
 	*/
 	@Test

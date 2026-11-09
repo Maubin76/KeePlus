@@ -1,5 +1,6 @@
 package fr.maubin.keeplus.desktop
 
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -25,6 +26,10 @@ import fr.maubin.keeplus.ui.KeePlusApp
 import fr.maubin.keeplus.ui.PickedFile
 import fr.maubin.keeplus.ui.VaultFiles
 import fr.maubin.keeplus.ui.theme.KeeColors
+import fr.maubin.keeplus.desktop.update.DesktopUpdateInstaller
+import fr.maubin.keeplus.desktop.update.appFolder
+import fr.maubin.keeplus.desktop.update.appVersion
+import fr.maubin.keeplus.desktop.update.cleanLeftover
 import fr.maubin.keeplus.ui.theme.logoImage
 import fr.maubin.keeplus.sync.PcSync
 import fr.maubin.keeplus.settings.SettingsStore
@@ -80,7 +85,9 @@ class DesktopFiles : VaultFiles
 	selon les délais réglés après que la fenêtre a été réduite ou fermée.
 	Lancé avec Windows (--demarrage), il reste dans la zone de notification.
 	La synchronisation avec les téléphones écoute sur le réseau de la maison
-	(réseau relu toutes les 30 s).
+	(réseau relu toutes les 30 s). Une nouvelle version publiée est proposée
+	après le déverrouillage ; pour l'installer, l'appli se ferme vraiment (fin
+	du processus) et un script remplace son dossier.
 */
 fun main(inArgs: Array<String>)
 {
@@ -90,18 +97,28 @@ fun main(inArgs: Array<String>)
 	application {
 		val vScope      = rememberCoroutineScope()												// rechargement après une synchronisation
 		val vStore      = remember { VaultStore(File(dataDir(), "coffre.kdbx"), VaultBackups(backupDir(), 7)) }	// coffre du PC et ses sauvegardes
-		val vController = remember { AppController(vStore, DesktopFiles(), fSettings = SettingsStore(File(dataDir(), "reglages.json"))) }	// état de l'appli
+		val vController = remember {
+			AppController(
+				fStore    = vStore,
+				fFiles    = DesktopFiles(),
+				fSettings = SettingsStore(File(dataDir(), "reglages.json")),
+				fUpdater  = DesktopUpdateInstaller(fOnQuit = ::exitApplication)
+			).also { vApp ->
+				if (appFolder()?.let(::cleanLeftover) == true) vApp.announce("La mise à jour précédente n'a pas pu remplacer l'appli : elle vous sera reproposée.")
+			}
+		}																						// état de l'appli
 		val vSync       = remember {
 			PcSync(
 				fFile      = File(dataDir(), "appareils.json"),
 				fVault     = vStore,
 				fName      = pcName(),
-				fVersion   = appVersion(),
+				fVersion   = appVersion() ?: "dev",
 				fNetworks  = ::currentNetworks,
 				fAddresses = ::localAddresses,
 				fOnStored  = { vScope.launch { vController.reloadFromDisk() } }
 			)
 		}																						// synchronisation avec les téléphones
+		DisposableEffect(vSync) { onDispose { vSync.stop() } }
 		LaunchedEffect(vSync) {
 			while (true)
 			{
@@ -129,7 +146,7 @@ fun main(inArgs: Array<String>)
 				Item("Ouvrir KeePlus", onClick = { vVisible = true })
 				Item("Verrouiller", enabled = vController.screen is AppScreen.Opened, onClick = { vController.lock() })
 				Separator()
-				Item("Quitter", onClick = { vSync.stop(); exitApplication() })
+				Item("Quitter", onClick = ::exitApplication)
 			}
 		)
 		Window(
@@ -161,6 +178,7 @@ fun main(inArgs: Array<String>)
 			)
 		}
 	}
+	exitProcess(0)
 }
 
 /*
@@ -177,7 +195,3 @@ fun pcName(): String =
 		?: runCatching { java.net.InetAddress.getLocalHost().hostName }.getOrNull()?.takeIf { it.isNotBlank() }
 		?: "PC"
 
-/*
-	Version de l'appli (paquet installé) ; « dev » lancée depuis les sources.
-*/
-fun appVersion(): String = PcSync::class.java.`package`?.implementationVersion ?: "dev"

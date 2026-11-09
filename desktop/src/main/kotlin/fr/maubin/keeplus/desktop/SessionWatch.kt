@@ -51,6 +51,11 @@ object SessionWatch
 	}																						// bureaux ; null hors Windows
 
 	/*
+		Vrai si la surveillance est possible (Windows, user32.dll chargée).
+	*/
+	val available: Boolean get() = fDesktops != null
+
+	/*
 		Vrai si la session est verrouillée en ce moment.
 	*/
 	fun isLocked(): Boolean

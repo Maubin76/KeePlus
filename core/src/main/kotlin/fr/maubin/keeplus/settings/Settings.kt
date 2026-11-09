@@ -16,12 +16,16 @@ val kClipboardChoices = listOf(15, 30, 60)												// durées du presse-papie
 	idleMinutes      : verrouillage après ce nombre de minutes sans geste
 	hiddenSeconds    : verrouillage après ce nombre de secondes en arrière-plan (0 : aussitôt)
 	clipboardSeconds : un secret copié est effacé du presse-papiers après ce délai
+	updates          : nouvelle version cherchée au lancement
+	ignoredUpdate    : version que l'utilisateur ne veut plus se voir proposer ; vide sans
 */
 @Serializable
 data class KeeSettings(
-	val idleMinutes      : Int = 5,
-	val hiddenSeconds    : Int = 60,
-	val clipboardSeconds : Int = 30
+	val idleMinutes      : Int     = 5,
+	val hiddenSeconds    : Int     = 60,
+	val clipboardSeconds : Int     = 30,
+	val updates          : Boolean = true,
+	val ignoredUpdate    : String  = ""
 )
 
 /*
