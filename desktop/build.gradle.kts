@@ -37,6 +37,18 @@ dependencies {
 val kVersion = property("keeplus.version").toString()								// version affichée
 val kPackage = (kVersion.split('.') + listOf("0", "0", "0")).take(3).joinToString(".")	// version du paquet
 
+// Version lue par l'appli au lancement (mises à jour, présentation aux téléphones) :
+// ressource version.properties générée à la construction.
+val generateVersion = tasks.register("generateVersion") {
+	val vOut = layout.buildDirectory.dir("generated/version")						// dossier généré
+	inputs.property("version", kVersion)
+	outputs.dir(vOut)
+	doLast {
+		vOut.get().file("version.properties").asFile.apply { parentFile.mkdirs(); writeText("version=$kVersion\n") }
+	}
+}
+sourceSets.main { resources.srcDir(generateVersion) }
+
 // Tests sans écran, comme sur la CI (Linux) : une fenêtre AWT y serait refusée.
 tasks.withType<Test>().configureEach {
 	systemProperty("java.awt.headless", "true")

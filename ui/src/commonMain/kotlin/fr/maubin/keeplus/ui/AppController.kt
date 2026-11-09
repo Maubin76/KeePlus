@@ -10,6 +10,8 @@ import fr.maubin.keeplus.vault.Vault
 import fr.maubin.keeplus.vault.VaultException
 import fr.maubin.keeplus.settings.KeeSettings
 import fr.maubin.keeplus.settings.SettingsStore
+import fr.maubin.keeplus.ui.update.UpdateInstaller
+import fr.maubin.keeplus.ui.update.UpdateManager
 import fr.maubin.keeplus.vault.VaultBackup
 import fr.maubin.keeplus.vault.VaultStore
 import fr.maubin.keeplus.vault.decodeVault
@@ -117,6 +119,7 @@ sealed interface AppScreen
 	fNow       : horloge en millisecondes (verrouillage automatique)
 	fSync      : synchronisation vue par l'appli ; null sans
 	fSettings  : fichier des réglages ; null pour les réglages par défaut (tests)
+	fUpdater   : installation des mises à jour propre à la plateforme ; null sans mises à jour
 */
 class AppController(
 	private val fStore     : VaultStore,
@@ -124,7 +127,8 @@ class AppController(
 	private val fBiometric : BiometricUnlock? = null,
 	private val fNow       : () -> Long       = System::currentTimeMillis,
 	private val fSync      : SyncHooks?       = null,
-	private val fSettings  : SettingsStore?   = null
+	private val fSettings  : SettingsStore?   = null,
+	fUpdater               : UpdateInstaller? = null
 )
 {
 	/*
@@ -148,6 +152,13 @@ class AppController(
 	*/
 	var settings: KeeSettings by mutableStateOf(fSettings?.load() ?: KeeSettings())
 		private set
+
+	/*
+		Mises à jour de l'appli ; null sans (tests, démonstration hors appli).
+	*/
+	val updates: UpdateManager? = fUpdater?.let { vInstaller ->
+		UpdateManager(vInstaller, { settings.updates }, { settings.ignoredUpdate }, { vVersion -> updateSettings(settings.copy(ignoredUpdate = vVersion)) })
+	}
 
 	/*
 		Vrai si l'appareil peut déverrouiller par l'empreinte (capteur et
@@ -733,6 +744,15 @@ class AppController(
 		fPending       = null
 		offerBiometric = false
 		screen         = if (vOpened.demo && !fStore.exists()) AppScreen.Welcome else AppScreen.Locked
+	}
+
+	/*
+		Affiche un message à l'écran de déverrouillage (mise à jour ratée…).
+		inMessage : message
+	*/
+	fun announce(inMessage: String)
+	{
+		error = inMessage
 	}
 
 	/*
