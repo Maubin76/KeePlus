@@ -2,7 +2,8 @@
 <!-- allowBackup="false" : le coffre ne doit jamais partir dans la sauvegarde Google.
      configChanges : l'activité n'est pas recréée en tournant l'écran, le coffre ouvert reste en mémoire.
      Réseau : synchronisation avec les PC sur le Wi-Fi de la maison seulement (localisation : lecture du
-     nom du Wi-Fi, jamais d'une position) ; appareil photo : lecture du QR code d'appairage. -->
+     nom du Wi-Fi, jamais d'une position) ; appareil photo : lecture du QR code d'appairage ;
+     vibreur : choc de l'animation d'ouverture. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
 	<uses-permission android:name="android.permission.INTERNET" />
@@ -11,6 +12,7 @@
 	<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 	<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 	<uses-permission android:name="android.permission.CAMERA" />
+	<uses-permission android:name="android.permission.VIBRATE" />
 	<uses-feature android:name="android.hardware.camera" android:required="false" />
 
 	<application

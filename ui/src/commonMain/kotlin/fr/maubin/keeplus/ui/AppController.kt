@@ -133,6 +133,12 @@ class AppController(
 	var showDevices: Boolean by mutableStateOf(false)
 
 	/*
+		Animation d'ouverture en cours : l'écran de connexion attend (ni
+		demande d'empreinte, ni clavier).
+	*/
+	var introPlaying: Boolean by mutableStateOf(false)
+
+	/*
 		Écran des réglages affiché.
 	*/
 	var showSettings: Boolean by mutableStateOf(false)

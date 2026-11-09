@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-	<!-- Fond de la fenêtre avant le premier dessin de Compose (voir DESIGN.md, ground). -->
-	<color name="ground">#FF0B0B0C</color>
+	<!-- Gris du métal du logo (milieu du dégradé argent) : fond de la fenêtre au lancement. -->
+	<color name="metal">#FFD9D9DB</color>
 </resources>

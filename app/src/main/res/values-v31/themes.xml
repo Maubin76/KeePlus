@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<!-- Android 12 et plus : écran de lancement du système gris uni, sans icône ; l'animation
+	     d'ouverture de l'appli prend le relais sur le même gris. -->
+	<style name="Theme.KeePlus" parent="android:Theme.Material.NoActionBar">
+		<item name="android:windowBackground">@color/metal</item>
+		<item name="android:windowSplashScreenBackground">@color/metal</item>
+		<item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_vide</item>
+	</style>
+</resources>

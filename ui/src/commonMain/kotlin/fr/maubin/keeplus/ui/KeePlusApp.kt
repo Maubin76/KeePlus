@@ -98,7 +98,8 @@ fun KeePlusApp(
 						inOnTyping = inController::clearError,
 						inOnDone   = inController::open,
 						inOnDemo   = { vScope.launch { inController.openDemo() } },
-						inOnFinger = if (inController.biometricReady) inController::unlockWithBiometric else null
+						inOnFinger = if (inController.biometricReady) inController::unlockWithBiometric else null,
+						inReady    = !inController.introPlaying
 					)
 					is AppScreen.Opened -> VaultScreen(inController, vScreen.vault, vScreen.demo, inDevices, inSettings)
 				}

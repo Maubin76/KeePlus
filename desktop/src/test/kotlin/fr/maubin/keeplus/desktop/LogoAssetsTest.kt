@@ -21,7 +21,7 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 
 private const val kAdaptive = 108.0														// côté de l'icône adaptative Android (dp)
-private const val kVisible  = 72.0														// partie toujours visible après découpe par le lanceur (dp)
+private const val kVisible  = 72.0														// partie visible après découpe par le lanceur (dp)
 private val kDensities      = mapOf("mdpi" to 1f, "hdpi" to 1.5f, "xhdpi" to 2f, "xxhdpi" to 3f, "xxxhdpi" to 4f)	// densités Android
 private val kIcoSizes       = listOf(16, 24, 32, 48, 64, 128, 256)						// tailles du fichier .ico
 
@@ -69,8 +69,9 @@ private fun ico(inImages: Map<Int, ByteArray>): ByteArray
 
 /*
 	Génère les fichiers du logo à partir de son dessin (module :ui) : image
-	de référence, icône Windows, icône adaptative Android (fond brossé et
-	bouclier gravé par densité, version monochrome vectorielle). À relancer
+	de référence, icône Windows, icône adaptative Android (plaque brossée
+	plein cadre et bouclier gravé, par densité ; version monochrome
+	vectorielle). À relancer
 	après toute retouche du logo ; le résultat est versionné.
 */
 class LogoAssetsTest
@@ -90,15 +91,16 @@ class LogoAssetsTest
 		// Icône Windows : à plat en très petit, matière complète au-delà.
 		File(vRoot, "desktop/icons/keeplus.ico").writeBytes(ico(kIcoSizes.associateWith { png(logoImage(it, it >= 48)) }))
 
-		// Icône adaptative Android : la plaque de 100 unités occupe la partie visible (72 dp sur 108).
+		// Icône adaptative Android : la plaque brossée remplit toute la forme du lanceur (fond), le
+		// bouclier gravé est à l'échelle d'un logo de 72 dp, la partie toujours visible (premier plan).
 		for ((vName, vScale) in kDensities)
 		{
 			val vSide   = (kAdaptive * vScale).toInt()													// côté en pixels
 			val vLogo   = (kVisible * vScale).toFloat()													// côté du logo en pixels
 			val vOffset = ((kAdaptive - kVisible) / 2 * vScale).toFloat()								// marge
 			val vDir    = File(vRoot, "app/src/main/res/mipmap-$vName").apply { mkdirs() }			// dossier de la densité
-			File(vDir, "ic_launcher_background.png").writeBytes(png(image(vSide) { drawLogoMetal(vSide.toFloat()) }))
-			File(vDir, "ic_launcher_foreground.png").writeBytes(png(image(vSide) { drawLogoShield(vLogo, Offset(vOffset, vOffset), inCarved = true) }))
+			File(vDir, "ic_launcher_background.png").writeBytes(png(image(vSide) { drawLogoMetal() }))
+			File(vDir, "ic_launcher_foreground.png").writeBytes(png(image(vSide) { drawLogoShield(vLogo, Offset(vOffset, vOffset)) }))
 		}
 
 		// Version monochrome (icônes thématiques d'Android 13 et plus) : bouclier évidé, vectoriel.

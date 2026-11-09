@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-	<!-- Thème de la fenêtre : sombre, sans barre d'action ; Compose dessine tout le reste. -->
+	<!-- Thème de la fenêtre : sans barre d'action ; Compose dessine tout le reste. Fond gris du métal
+	     du logo : le lancement s'enchaîne sans saut avec l'animation d'ouverture. -->
 	<style name="Theme.KeePlus" parent="android:Theme.Material.NoActionBar">
-		<item name="android:windowBackground">@color/ground</item>
+		<item name="android:windowBackground">@color/metal</item>
 	</style>
 </resources>

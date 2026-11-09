@@ -50,6 +50,8 @@ private const val kFadeDelay  = 300														// départ de la dissipation ap
 	inOnDemo   : ouvrir le coffre de démonstration ; null pour ne pas le proposer
 	inOnFinger : ouvre le coffre par l'empreinte (null si annulé) ; null si
 	             l'empreinte n'est pas active. Proposée d'emblée à l'affichage.
+	inReady    : écran prêt à agir (faux pendant l'animation d'ouverture) :
+	             l'empreinte et le clavier attendent
 */
 @Composable
 fun UnlockScreen(
@@ -61,7 +63,8 @@ fun UnlockScreen(
 	inOnTyping : () -> Unit,
 	inOnDone   : (Vault) -> Unit,
 	inOnDemo   : (() -> Unit)? = null,
-	inOnFinger : (suspend () -> Vault?)? = null
+	inOnFinger : (suspend () -> Vault?)? = null,
+	inReady    : Boolean                 = true
 )
 {
 	val vScope    = rememberCoroutineScope()												// ouverture et animations
@@ -129,7 +132,8 @@ fun UnlockScreen(
 		val vFinger = inOnFinger ?: return															// ouverture par l'empreinte
 		attempt(vFinger, { false })
 	}
-	LaunchedEffect(Unit) {
+	LaunchedEffect(inReady) {
+		if (!inReady) return@LaunchedEffect
 		if (inOnFinger != null)
 		{
 			delay(250)

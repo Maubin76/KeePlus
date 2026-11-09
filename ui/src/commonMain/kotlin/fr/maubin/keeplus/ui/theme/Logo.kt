@@ -128,27 +128,31 @@ fun shieldPath(
 /*
 	Plaque d'aluminium brossé, lumière en haut à gauche, sur un contour
 	donné : stries horizontales continues, lumière douce, ombre légère.
-	inShape : contour de la plaque (pixels)
-	inSide  : côté de référence du logo (pixels)
+	inShape  : contour de la plaque (pixels)
+	inBounds : rectangle de la plaque (dégradé et lumière s'y calent)
+	inUnit   : pixels par unité du logo (finesse des stries)
 */
 private fun DrawScope.drawMetal(
-	inShape : Path,
-	inSide  : Float
+	inShape  : Path,
+	inBounds : Rect,
+	inUnit   : Float
 )
 {
-	val vK      = inSide / 100f																// pixels par unité
+	val vW      = inBounds.width																// largeur
+	val vH      = inBounds.height																// hauteur
+	val vSide   = maxOf(vW, vH)																// plus grande dimension
 	val vRandom = Random(5)																	// tirage stable des stries
-	drawPath(inShape, Brush.linearGradient(kSilver, Offset(inSide * .15f, 0f), Offset(inSide * .85f, inSide)))
+	drawPath(inShape, Brush.linearGradient(kSilver, Offset(inBounds.left + vW * .15f, inBounds.top), Offset(inBounds.left + vW * .85f, inBounds.bottom)))
 	clipPath(inShape) {
-		var vY = 0f																			// hauteur de la strie
-		while (vY < size.height)
+		var vY = inBounds.top																	// hauteur de la strie
+		while (vY < inBounds.bottom)
 		{
 			val vLight = vRandom.nextBoolean()													// strie claire ou sombre
-			drawLine((if (vLight) Color.White else Color.Black).copy(alpha = (.008f + vRandom.nextFloat() * .022f) * 2.4f), Offset(0f, vY), Offset(size.width, vY), (.06f + vRandom.nextFloat() * .12f) * vK)
-			vY += (.08f + vRandom.nextFloat() * .16f) * vK
+			drawLine((if (vLight) Color.White else Color.Black).copy(alpha = (.008f + vRandom.nextFloat() * .022f) * 2.4f), Offset(inBounds.left, vY), Offset(inBounds.right, vY), (.06f + vRandom.nextFloat() * .12f) * inUnit)
+			vY += (.08f + vRandom.nextFloat() * .16f) * inUnit
 		}
-		drawRect(Brush.radialGradient(listOf(Color.White.copy(alpha = .44f), Color.Transparent), Offset(inSide * .2f, inSide * .1f), inSide * .75f))
-		drawRect(Brush.radialGradient(listOf(Color.Transparent, Color.Black.copy(alpha = .20f)), Offset(inSide * .35f, inSide * .3f), inSide * .95f))
+		drawRect(Brush.radialGradient(listOf(Color.White.copy(alpha = .44f), Color.Transparent), Offset(inBounds.left + vW * .2f, inBounds.top + vH * .1f), vSide * .75f))
+		drawRect(Brush.radialGradient(listOf(Color.Transparent, Color.Black.copy(alpha = .20f)), Offset(inBounds.left + vW * .35f, inBounds.top + vH * .3f), vSide * .95f))
 	}
 }
 
@@ -157,38 +161,40 @@ private fun DrawScope.drawMetal(
 	vers inSide pixels, décalé de inOffset).
 	inSide   : côté du logo (pixels)
 	inOffset : position du coin du logo
-	inCarved : gravé dans le métal (lèvre claire, ombre, « + » creusé)
+	inCarve  : gravure dans le métal (lèvre claire, ombre, « + » creusé), de 0 (à plat) à 1
 */
 fun DrawScope.drawLogoShield(
 	inSide   : Float,
-	inOffset : Offset  = Offset.Zero,
-	inCarved : Boolean = true
+	inOffset : Offset = Offset.Zero,
+	inCarve  : Float  = 1f
 )
 {
 	val vK      = inSide / 100f																// pixels par unité
 	val vShield = path(shieldData(kShieldX, kShieldY, kShieldS))								// bouclier
 	val vPlus   = path(plusData(kShieldX, kShieldY, kShieldS))									// « + »
 	withTransform({ translate(inOffset.x, inOffset.y); scale(vK, vK, Offset.Zero) }) {
-		if (inCarved)
+		if (inCarve > 0f)
 		{
-			translate(.6f, .9f) { drawPath(vShield, Color.White.copy(alpha = .85f)) }
-			translate(-.5f, -.7f) { drawPath(vShield, Color.Black.copy(alpha = .32f)) }
+			translate(.6f, .9f) { drawPath(vShield, Color.White.copy(alpha = .85f * inCarve)) }
+			translate(-.5f, -.7f) { drawPath(vShield, Color.Black.copy(alpha = .32f * inCarve)) }
 		}
 		drawPath(vShield, kInk)
 		clipPath(vShield) { drawPath(path(facetData(kShieldX, kShieldY, kShieldS)), kFacet) }
-		if (inCarved) translate(-.3f, -.4f) { drawPath(vPlus, Color.Black.copy(alpha = .35f)) }
+		if (inCarve > 0f) translate(-.3f, -.4f) { drawPath(vPlus, Color.Black.copy(alpha = .35f * inCarve)) }
 		drawPath(vPlus, Brush.linearGradient(kSilver, Offset(15f, 0f), Offset(85f, 100f)))
 	}
 }
 
 /*
-	Plaque brossée seule, sans chanfrein, sur tout le carré (fond de l'icône
-	adaptative Android, découpé par le lanceur).
-	inSide : côté (pixels)
+	Plaque brossée seule, sans chanfrein, sur toute la zone de dessin (fond
+	de l'icône adaptative Android, écran d'ouverture).
+	inUnit : pixels par unité du logo (finesse des stries) ; par défaut, la
+	         zone est un logo de 100 unités
 */
-fun DrawScope.drawLogoMetal(inSide: Float)
+fun DrawScope.drawLogoMetal(inUnit: Float = minOf(size.width, size.height) / 100f)
 {
-	drawMetal(Path().apply { addRect(Rect(0f, 0f, inSide, inSide)) }, inSide)
+	val vBounds = Rect(0f, 0f, size.width, size.height)										// zone de dessin
+	drawMetal(Path().apply { addRect(vBounds) }, vBounds, inUnit)
 }
 
 /*
@@ -207,15 +213,15 @@ fun DrawScope.drawLogo(
 	if (!inMaterial)
 	{
 		drawPath(vTile, Brush.linearGradient(kSilver, Offset(inSide * .15f, 0f), Offset(inSide * .85f, inSide)))
-		drawLogoShield(inSide, inCarved = false)
+		drawLogoShield(inSide, inCarve = 0f)
 		return
 	}
 	val vInset = kBevel * vK																	// largeur du chanfrein
 	val vFace  = Path().apply { addRoundRect(RoundRect(vInset, vInset, inSide - vInset, inSide - vInset, CornerRadius(kTileRadius * vK - vInset))) }	// face
 	drawPath(vTile, Brush.verticalGradient(listOf(Color(0xFFFFFFFF), Color(0xFFD2D2D4), Color(0xFF868689)), 0f, inSide))
-	drawMetal(vFace, inSide)
+	drawMetal(vFace, Rect(0f, 0f, inSide, inSide), vK)
 	drawPath(vFace, Brush.verticalGradient(listOf(Color.White.copy(alpha = .9f), Color.Transparent), 0f, inSide * .06f), style = Stroke(.7f * vK))
-	drawLogoShield(inSide, inCarved = true)
+	drawLogoShield(inSide)
 }
 
 /*

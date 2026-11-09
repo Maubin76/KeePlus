@@ -13,6 +13,13 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
 import fr.maubin.keeplus.settings.SettingsStore
@@ -20,6 +27,7 @@ import fr.maubin.keeplus.ui.AppController
 import fr.maubin.keeplus.ui.KeePlusApp
 import fr.maubin.keeplus.ui.PickedFile
 import fr.maubin.keeplus.ui.VaultFiles
+import fr.maubin.keeplus.ui.screens.LaunchIntro
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -62,7 +70,8 @@ class MainActivity : FragmentActivity(), VaultFiles
 
 	/*
 		Création : écran protégé, barres système transparentes sur fond sombre,
-		contenu Compose, touche Retour confiée à l'appli quand elle a un sens.
+		contenu Compose précédé de l'animation d'ouverture (au lancement
+		seulement), touche Retour confiée à l'appli quand elle a un sens.
 		inState : état sauvegardé
 	*/
 	override fun onCreate(inState: Bundle?)
@@ -80,13 +89,18 @@ class MainActivity : FragmentActivity(), VaultFiles
 				fController.mergePending()
 			}
 		}																						// coffre remplacé ou en attente de fusion
+		fController.introPlaying = inState == null
 		setContent {
+			var vIntro by remember { mutableStateOf(inState == null) }							// animation d'ouverture affichée
 			BackHandler(enabled = fController.canGoBack) { fController.back() }
-			KeePlusApp(
-				inController = fController,
-				inSettings   = { PhoneSettings(fSync.fStore) },
-				inDevices    = { DevicesScreen(fSync) { fController.showDevices = false } }
-			)
+			Box(Modifier.fillMaxSize()) {
+				KeePlusApp(
+					inController = fController,
+					inSettings   = { PhoneSettings(fSync.fStore) },
+					inDevices    = { DevicesScreen(fSync) { fController.showDevices = false } }
+				)
+				if (vIntro) LaunchIntro(inOnFaded = { fController.introPlaying = false }, inOnDone = { vIntro = false })
+			}
 		}
 	}
 

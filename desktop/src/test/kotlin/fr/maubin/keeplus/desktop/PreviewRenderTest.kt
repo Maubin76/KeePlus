@@ -8,6 +8,8 @@ import fr.maubin.keeplus.ui.AppScreen
 import fr.maubin.keeplus.ui.screens.CreateScreen
 import fr.maubin.keeplus.ui.screens.HeroTitle
 import fr.maubin.keeplus.ui.screens.KeyScreen
+import fr.maubin.keeplus.ui.screens.IntroFrame
+import fr.maubin.keeplus.ui.screens.IntroState
 import fr.maubin.keeplus.ui.screens.UnlockScreen
 import fr.maubin.keeplus.ui.screens.VaultScreen
 import fr.maubin.keeplus.ui.screens.WelcomeScreen
@@ -44,6 +46,31 @@ class PreviewRenderTest
 				File(vDir, "$inName-$vFormat.png").writeBytes(vImage.encodeToData(EncodedImageFormat.PNG)!!.bytes)
 			}
 		}
+	}
+
+	/*
+		Animation d'ouverture, image par image (format téléphone), assemblée
+		en une planche : plaque, chute, impact, gravure, fondu.
+	*/
+	@Test
+	fun renderIntroFrames()
+	{
+		val vDir    = File("build/previews").apply { mkdirs() }								// dossier des rendus
+		val vSteps  = listOf(
+			IntroState(), IntroState(fall = .3f), IntroState(fall = .6f), IntroState(fall = .9f),
+			IntroState(fall = 1f, bounce = .075f, press = 1f, impact = 1f, shakeY = 12f, shakeX = -3.5f),
+			IntroState(fall = 1f, bounce = -.03f, press = -.25f, impact = .75f, shakeY = -7f, shakeX = 2.5f, carve = .3f),
+			IntroState(fall = 1f, bounce = .012f, press = .08f, impact = .45f, shakeY = 4f, carve = .7f),
+			IntroState(fall = 1f, carve = 1f), IntroState(fall = 1f, carve = 1f, fade = .5f), IntroState(fall = 1f, carve = 1f, fade = .1f)
+		)																						// étapes
+		val vFrames = vSteps.map { vStep ->
+			ImageComposeScene(412, 892) { KeePlusTheme { IntroFrame(vStep) } }.use { it.render() }
+		}																						// images
+		val vSurface = org.jetbrains.skia.Surface.makeRasterN32Premul(206 * vFrames.size, 446)	// planche
+		vFrames.forEachIndexed { vIndex, vFrame ->
+			vSurface.canvas.drawImageRect(vFrame, org.jetbrains.skia.Rect.makeXYWH(vIndex * 206f, 0f, 206f, 446f))
+		}
+		File(vDir, "ouverture.png").writeBytes(vSurface.makeImageSnapshot().encodeToData(EncodedImageFormat.PNG)!!.bytes)
 	}
 
 	/*
