@@ -27,6 +27,7 @@ dependencies {
 	implementation(libs.compose.desktop.material3)
 	implementation(libs.kotlinx.coroutines.swing)
 	implementation(libs.jna.platform)													// barre de titre sombre, premier plan, verrouillage de session (Windows)
+	implementation(libs.zxing.core)														// QR code de l'appairage du téléphone
 
 	testImplementation(libs.junit)
 	testImplementation(libs.kotlinx.coroutines.core)

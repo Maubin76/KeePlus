@@ -9,6 +9,8 @@ import fr.maubin.keeplus.vault.EntryDraft
 import fr.maubin.keeplus.vault.Vault
 import fr.maubin.keeplus.vault.VaultException
 import fr.maubin.keeplus.vault.VaultStore
+import fr.maubin.keeplus.vault.decodeVault
+import fr.maubin.keeplus.vault.mergeVaults
 import fr.maubin.keeplus.vault.demoVault
 import fr.maubin.keeplus.vault.isKeePassFile
 import kotlinx.coroutines.Dispatchers
@@ -110,14 +112,21 @@ sealed interface AppScreen
 	fFiles     : accès aux fichiers de la plateforme
 	fBiometric : déverrouillage par empreinte ; null là où il n'existe pas (PC)
 	fNow       : horloge en millisecondes (verrouillage automatique)
+	fSync      : synchronisation vue par l'appli ; null sans
 */
 class AppController(
 	private val fStore     : VaultStore,
 	private val fFiles     : VaultFiles,
 	private val fBiometric : BiometricUnlock? = null,
-	private val fNow       : () -> Long       = System::currentTimeMillis
+	private val fNow       : () -> Long       = System::currentTimeMillis,
+	private val fSync      : SyncHooks?       = null
 )
 {
+	/*
+		Écran des appareils (synchronisation) affiché.
+	*/
+	var showDevices: Boolean by mutableStateOf(false)
+
 	private var fLastActivity : Long       = fNow()										// dernier geste de l'utilisateur
 	private var fHiddenSince  : Long?      = null											// appli masquée depuis ; null si visible
 	private var fPending      : CharArray? = null											// mot de passe gardé le temps de proposer l'empreinte
@@ -193,7 +202,7 @@ class AppController(
 	*/
 	val canGoBack: Boolean
 		get() = screen == AppScreen.Create || screen is AppScreen.Import ||
-			(screen is AppScreen.Opened && (selected != null || editing != null))
+			(screen is AppScreen.Opened && (selected != null || editing != null || showDevices))
 
 	/*
 		Retour : quitte l'édition sans enregistrer, ferme la fiche ouverte, ou
@@ -206,6 +215,7 @@ class AppController(
 		when
 		{
 			editing != null            -> editing = null
+			showDevices                -> showDevices = false
 			screen is AppScreen.Opened -> selected = null
 			else                       -> screen = AppScreen.Welcome
 		}
@@ -299,8 +309,25 @@ class AppController(
 			saving = true
 			try
 			{
-				fStore.save(inVault)
-				saveError = null
+				var vVault = inVault																// coffre à écrire
+				for (vTry in 1..3)
+				{
+					val vArrived = fStore.save(vVault)													// coffre arrivé entre-temps ; null si écrit
+					if (vArrived == null)
+					{
+						saveError = null
+						fSync?.changed()
+						return@withLock
+					}
+					vVault = Vault(mergeVaults(vVault.database, decodeVault(vArrived, vVault.database.credentials)).database)
+					fStore.accept(vArrived)
+					if (screen is AppScreen.Opened) screen = AppScreen.Opened(vVault, false)
+				}
+				saveError = "Échec de l'enregistrement : le coffre change sans cesse sur un autre appareil."
+			}
+			catch (vError: VaultException.WrongPassword)
+			{
+				saveError = "Le coffre arrivé d'un autre appareil a un autre mot de passe maître : modification non enregistrée."
 			}
 			catch (vError: Exception)
 			{
@@ -309,6 +336,65 @@ class AppController(
 			finally
 			{
 				saving = false
+			}
+		}
+	}
+
+	/*
+		Le coffre a peut-être été remplacé sur le disque par la synchronisation :
+		s'il est ouvert, il est relu avec sa clé (un nouveau mot de passe
+		maître, changé sur un autre appareil, verrouille le coffre) ; si
+		l'appareil n'avait pas de coffre, l'accueil laisse place au
+		déverrouillage.
+	*/
+	suspend fun reloadFromDisk()
+	{
+		fSaveLock.withLock {
+			val vOpened = screen as? AppScreen.Opened											// coffre ouvert
+			if (vOpened == null)
+			{
+				if (screen == AppScreen.Welcome && fStore.exists()) screen = AppScreen.Locked
+				return@withLock
+			}
+			if (vOpened.demo) return@withLock
+			val vArrived = fStore.changedOnDisk() ?: return@withLock								// coffre arrivé
+			try
+			{
+				val vVault = withContext(Dispatchers.Default) { Vault(decodeVault(vArrived, vOpened.vault.database.credentials)) }	// coffre relu
+				fStore.accept(vArrived)
+				if (screen is AppScreen.Opened) screen = AppScreen.Opened(vVault, false)
+			}
+			catch (vError: VaultException.WrongPassword)
+			{
+				lock()
+				error = "Le mot de passe maître a changé sur un autre appareil : saisissez le nouveau."
+			}
+		}
+	}
+
+	/*
+		Fusionne dans le coffre ouvert les coffres d'autres appareils en
+		attente (modifiés des deux côtés pendant que le coffre était
+		verrouillé), puis les enregistre ; la synchronisation renverra le
+		résultat. Un coffre au mot de passe maître différent est écarté, avec
+		un message.
+	*/
+	suspend fun mergePending()
+	{
+		val vSync = fSync ?: return																// synchronisation
+		for (vPending in vSync.pending())
+		{
+			val vVault = openedVault()?.takeIf { (screen as AppScreen.Opened).demo.not() } ?: return	// coffre ouvert
+			try
+			{
+				val vRemote = withContext(Dispatchers.Default) { decodeVault(vPending.bytes, vVault.database.credentials) }	// coffre de l'autre appareil
+				vSync.settle(vPending, true)
+				apply(Vault(mergeVaults(vVault.database, vRemote).database))
+			}
+			catch (vError: VaultException)
+			{
+				vSync.settle(vPending, false)
+				saveError = "Le coffre de « ${vPending.pcName} » a un autre mot de passe maître : fusion impossible."
 			}
 		}
 	}
@@ -526,6 +612,7 @@ class AppController(
 		error          = null
 		selected       = null
 		editing        = null
+		showDevices    = false
 		filter         = ListFilter.All
 		query.clearText()
 		fPending?.fill(Char(0))

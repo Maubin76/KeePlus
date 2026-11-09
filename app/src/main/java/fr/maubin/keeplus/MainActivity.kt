@@ -14,15 +14,15 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.lifecycleScope
 import fr.maubin.keeplus.ui.AppController
 import fr.maubin.keeplus.ui.KeePlusApp
 import fr.maubin.keeplus.ui.PickedFile
 import fr.maubin.keeplus.ui.VaultFiles
-import fr.maubin.keeplus.vault.VaultStore
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
 
 /*
 	Activité unique de KeePlus. Écran protégé (FLAG_SECURE) : ni capture, ni
@@ -34,12 +34,14 @@ import java.io.File
 	fPicker     : sélecteur de documents du système
 	fController : état de l'appli
 	fScreenOff  : écoute de l'extinction de l'écran
+	fSync       : synchronisation avec les PC
 */
 class MainActivity : FragmentActivity(), VaultFiles
 {
 	private var fPending: CompletableDeferred<Uri?>? = null
 	private val fPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { inUri -> fPending?.complete(inUri) }
 	private lateinit var fController: AppController
+	private lateinit var fSync: AndroidSync
 	private val fScreenOff = object : BroadcastReceiver()
 	{
 		/*
@@ -66,21 +68,31 @@ class MainActivity : FragmentActivity(), VaultFiles
 		super.onCreate(inState)
 		window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
 		enableEdgeToEdge(SystemBarStyle.dark(android.graphics.Color.TRANSPARENT), SystemBarStyle.dark(android.graphics.Color.TRANSPARENT))
-		fController = AppController(VaultStore(File(filesDir, "coffre.kdbx")), this, AndroidBiometric(this))
+		fSync       = AndroidSync.get(this)
+		fController = AppController(fSync.fStore, this, AndroidBiometric(this), fSync = fSync)
 		registerReceiver(fScreenOff, IntentFilter(Intent.ACTION_SCREEN_OFF))
+		scheduleSync(this)
+		lifecycleScope.launch {
+			fSync.changes.collect {
+				fController.reloadFromDisk()
+				fController.mergePending()
+			}
+		}																						// coffre remplacé ou en attente de fusion
 		setContent {
 			BackHandler(enabled = fController.canGoBack) { fController.back() }
-			KeePlusApp(fController)
+			KeePlusApp(fController) { DevicesScreen(fSync) { fController.showDevices = false } }
 		}
 	}
 
 	/*
-		Retour au premier plan : verrouille si l'absence a été trop longue.
+		Retour au premier plan : verrouille si l'absence a été trop longue, puis
+		synchronise avec les PC de la maison.
 	*/
 	override fun onStart()
 	{
 		super.onStart()
 		fController.setHidden(false)
+		fSync.syncSoon()
 	}
 
 	/*

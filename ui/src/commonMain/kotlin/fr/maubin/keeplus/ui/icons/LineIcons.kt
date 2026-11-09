@@ -176,6 +176,25 @@ object LineIcons
 		"M12 12 V14.5 A10 10 0 0 1 10.5 20"
 	)
 
+	// Appareils : écran et téléphone.
+	val Devices: ImageVector = lineIcon(
+		"Appareils",
+		"M3.5 6 A1.5 1.5 0 0 1 5 4.5 H15.5 A1.5 1.5 0 0 1 17 6 V8",
+		"M3.5 6 V14 A1.5 1.5 0 0 0 5 15.5 H12",
+		"M7 19.5 H12",
+		"M15.5 10 H19.5 A1 1 0 0 1 20.5 11 V19 A1 1 0 0 1 19.5 20 H15.5 A1 1 0 0 1 14.5 19 V11 A1 1 0 0 1 15.5 10 Z",
+		"M17.5 17.5 V17.6"
+	)
+
+	// Synchroniser : deux flèches opposées.
+	val Sync: ImageVector = lineIcon(
+		"Synchroniser",
+		"M5 10 A7 7 0 0 1 18 8",
+		"M18 4 V8 H14",
+		"M19 14 A7 7 0 0 1 6 16",
+		"M6 20 V16 H10"
+	)
+
 	// Attention : cercle et point d'exclamation.
 	val Alert: ImageVector = lineIcon(
 		"Attention",

@@ -36,7 +36,8 @@ android {
 	}
 
 	buildFeatures {
-		compose = true
+		compose     = true
+		buildConfig = true
 	}
 }
 
@@ -53,6 +54,11 @@ dependencies {
 	implementation(libs.kotlinx.coroutines.android)
 	implementation(libs.androidx.biometric)													// déverrouillage par empreinte
 	implementation(libs.androidx.fragment.ktx)												// BiometricPrompt demande une FragmentActivity
+	implementation(libs.zxing.core)														// lecture du QR code d'appairage du PC
+	implementation(libs.androidx.camera.camera2)											// appareil photo (scan du QR code)
+	implementation(libs.androidx.camera.lifecycle)
+	implementation(libs.androidx.camera.view)
+	implementation(libs.androidx.work.runtime)												// synchronisation en tâche de fond
 	debugImplementation(libs.androidx.compose.ui.tooling)
 
 	testImplementation(libs.junit)

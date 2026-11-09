@@ -24,10 +24,16 @@ import kotlinx.coroutines.launch
 	Interface de KeePlus, commune à Android et au PC : enchaînement des
 	écrans selon l'état de l'appli, en fondu. Chaque geste (toucher, souris,
 	clavier) repousse le verrouillage automatique, vérifié chaque seconde.
+	À l'ouverture du coffre, les coffres d'autres appareils en attente sont
+	fusionnés.
 	inController : état de l'appli
+	inDevices    : écran des appareils (synchronisation), propre à la plateforme ; null sans
 */
 @Composable
-fun KeePlusApp(inController: AppController)
+fun KeePlusApp(
+	inController : AppController,
+	inDevices    : (@Composable () -> Unit)? = null
+)
 {
 	val vScope = rememberCoroutineScope()													// opérations lancées par les écrans
 	LaunchedEffect(inController) {
@@ -37,6 +43,8 @@ fun KeePlusApp(inController: AppController)
 			inController.checkAutoLock()
 		}
 	}
+	val vOpened = inController.screen is AppScreen.Opened										// coffre ouvert
+	LaunchedEffect(vOpened) { if (vOpened) inController.mergePending() }
 	KeePlusTheme {
 		Box(
 			Modifier
@@ -89,7 +97,7 @@ fun KeePlusApp(inController: AppController)
 						inOnDemo   = { vScope.launch { inController.openDemo() } },
 						inOnFinger = if (inController.biometricReady) inController::unlockWithBiometric else null
 					)
-					is AppScreen.Opened -> VaultScreen(inController, vScreen.vault, vScreen.demo)
+					is AppScreen.Opened -> VaultScreen(inController, vScreen.vault, vScreen.demo, inDevices)
 				}
 			}
 			if (inController.offerBiometric && inController.screen is AppScreen.Opened)

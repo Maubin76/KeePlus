@@ -5,6 +5,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
 	alias(libs.plugins.kotlin.jvm)
+	alias(libs.plugins.kotlin.serialization)
 }
 
 java {
@@ -22,6 +23,7 @@ dependencies {
 	api(libs.kotpass)																// format KDBX 4 (KeePass)
 	api(libs.okio)																	// ByteString des API de kotpass
 	api(libs.kotlinx.coroutines.core)
+	api(libs.kotlinx.serialization.json)													// messages entre appareils, fichiers des appareils
 
 	testImplementation(libs.junit)
 }

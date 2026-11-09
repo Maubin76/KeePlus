@@ -128,12 +128,14 @@ class CopyActions(
 	inController : état de l'appli
 	inVault      : coffre ouvert
 	inDemo       : coffre de démonstration
+	inDevices    : écran des appareils (synchronisation), propre à la plateforme ; null sans
 */
 @Composable
 fun VaultScreen(
 	inController : AppController,
 	inVault      : Vault,
-	inDemo       : Boolean
+	inDemo       : Boolean,
+	inDevices    : (@Composable () -> Unit)? = null
 )
 {
 	val vScope   = rememberCoroutineScope()													// actions sur le coffre
@@ -205,8 +207,10 @@ fun VaultScreen(
 			.focusRequester(vRoot)
 			.focusable()
 	) {
-		if (maxWidth >= kWideMin) WideVault(inController, inVault, inDemo, vItems, vCopy, vActions, vSearch)
-		else CompactVault(inController, inVault, inDemo, vItems, vCopy, vActions, vSearch)
+		val vDevices = inDevices?.takeIf { inController.showDevices && !inDemo }				// écran des appareils affiché
+		if (maxWidth >= kWideMin) WideVault(inController, inVault, inDemo, vItems, vCopy, vActions, vSearch, vDevices, inDevices != null && !inDemo)
+		else if (vDevices != null) vDevices()
+		else CompactVault(inController, inVault, inDemo, vItems, vCopy, vActions, vSearch, inDevices != null && !inDemo)
 		Notice(inController.saveError ?: vNotice, Modifier.align(Alignment.BottomCenter).safeDrawingPadding().padding(bottom = 24.dp))
 	}
 }
@@ -246,7 +250,8 @@ private fun CompactVault(
 	inItems      : List<VaultItem>,
 	inCopy       : CopyActions,
 	inActions    : EntryActions,
-	inSearch     : FocusRequester
+	inSearch     : FocusRequester,
+	inHasDevices : Boolean
 )
 {
 	val vEditing  = inController.editing														// entrée en édition
@@ -279,6 +284,7 @@ private fun CompactVault(
 							OneLine(inVault.name, keeType().title)
 							SaveStatus(inController)
 						}
+						if (inHasDevices) IconAction(LineIcons.Devices, "Appareils", { inController.showDevices = true }, inTint = KeeColors.text)
 						IconAction(LineIcons.Lock, "Verrouiller", inController::lock, inTint = KeeColors.text)
 					}
 					if (inDemo) DemoBadge(Modifier.padding(start = 20.dp, top = 4.dp))
@@ -307,11 +313,13 @@ private fun WideVault(
 	inItems      : List<VaultItem>,
 	inCopy       : CopyActions,
 	inActions    : EntryActions,
-	inSearch     : FocusRequester
+	inSearch     : FocusRequester,
+	inDevices    : (@Composable () -> Unit)?,
+	inHasDevices : Boolean
 )
 {
 	Row(Modifier.fillMaxSize()) {
-		GroupColumn(inController, inVault, inDemo)
+		GroupColumn(inController, inVault, inDemo, inHasDevices)
 		Column(
 			Modifier
 				.width(kListWidth)
@@ -331,6 +339,7 @@ private fun WideVault(
 			val vSelected = inController.selected?.takeIf { inVault.draft(it) != null }		// entrée affichée
 			when
 			{
+				inDevices != null -> inDevices()
 				vEditing != null  -> key(vEditing.id) { EntryEditor(inController, inVault, vEditing) }
 				vSelected != null -> EntryDetail(inVault, vSelected, inCopy, null, inActions)
 				else              -> BasicText("Choisissez une entrée.", Modifier.align(Alignment.Center), style = keeType().bodySmall)
@@ -384,13 +393,14 @@ private fun SaveStatus(inController: AppController)
 
 /*
 	Colonne des groupes (PC) : marque, nom du coffre, Tout, groupes avec leur
-	nombre d'entrées, Corbeille, et Verrouiller en bas.
+	nombre d'entrées, Corbeille, et en bas Appareils et Verrouiller.
 */
 @Composable
 private fun GroupColumn(
 	inController : AppController,
 	inVault      : Vault,
-	inDemo       : Boolean
+	inDemo       : Boolean,
+	inHasDevices : Boolean
 )
 {
 	val vType = keeType()																	// styles de texte
@@ -425,6 +435,7 @@ private fun GroupColumn(
 				GroupRow(LineIcons.Trash, "Corbeille", vTrash, 0, inController.filter == ListFilter.Trash) { inController.filter = ListFilter.Trash }
 			}
 		}
+		if (inHasDevices) GroupRow(LineIcons.Devices, "Appareils", null, 0, inController.showDevices) { inController.showDevices = !inController.showDevices }
 		GroupRow(LineIcons.Lock, "Verrouiller", null, 0, false, inController::lock)
 	}
 }

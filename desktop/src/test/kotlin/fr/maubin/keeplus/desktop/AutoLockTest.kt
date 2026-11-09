@@ -99,7 +99,7 @@ class AutoLockTest
 		inBiometric : empreinte simulée
 	*/
 	private fun opened(inBiometric: BiometricUnlock? = null): AppController = runBlocking {
-		val vController = AppController(VaultStore(fFolder.root.resolve("coffre.kdbx")), { null }, inBiometric) { fTime }	// appli
+		val vController = AppController(VaultStore(fFolder.root.resolve("coffre.kdbx")), { null }, inBiometric, fNow = { fTime })	// appli
 		vController.open(vController.create("Perso", "un mot de passe solide")!!)
 		vController
 	}

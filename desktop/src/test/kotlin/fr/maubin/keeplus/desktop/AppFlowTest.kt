@@ -3,9 +3,11 @@ package fr.maubin.keeplus.desktop
 import fr.maubin.keeplus.ui.AppController
 import fr.maubin.keeplus.ui.AppScreen
 import fr.maubin.keeplus.ui.PickedFile
+import fr.maubin.keeplus.sync.vaultFingerprint
 import fr.maubin.keeplus.vault.EntryDraft
 import fr.maubin.keeplus.vault.VaultStore
 import fr.maubin.keeplus.vault.createVault
+import fr.maubin.keeplus.vault.decodeVault
 import fr.maubin.keeplus.vault.encodeVault
 import fr.maubin.keeplus.vault.Vault
 import kotlinx.coroutines.runBlocking
@@ -82,6 +84,38 @@ class AppFlowTest
 		vDemo.saveEntry(vDemo.editing!!.copy(title = "Essai"))
 		assertTrue((vDemo.screen as AppScreen.Opened).vault.items().any { it.title == "Essai" })
 		assertTrue(!vDemoFile.exists())
+	}
+
+	/*
+		Synchronisation vue du coffre ouvert : un coffre arrivé d'un autre
+		appareil est fusionné à l'enregistrement suivant (rien n'est écrasé),
+		et un coffre arrivé sans modification locale est simplement relu.
+	*/
+	@Test
+	fun arrivalsAreMergedOrReloaded() = runBlocking {
+		val vFile       = fFolder.root.resolve("coffre.kdbx")									// coffre de l'appareil
+		val vStore      = VaultStore(vFile)														// accès au coffre
+		val vController = AppController(vStore, { null })										// appli
+		vController.open(vController.create("Perso", "un mot de passe solide")!!)
+		/*
+			Un autre appareil remplace le coffre en y ajoutant une entrée.
+			inTitle : titre de l'entrée ajoutée
+		*/
+		fun arrive(inTitle: String)
+		{
+			val vNow   = vStore.read()!!																// coffre actuel
+			val vOther = Vault(decodeVault(vNow, "un mot de passe solide")).save(EntryDraft(title = inTitle))	// coffre de l'autre appareil
+			assertTrue(vStore.replace(encodeVault(vOther.database), vaultFingerprint(vNow)))
+		}
+		arrive("Du téléphone")
+		vController.startNew()
+		vController.saveEntry(vController.editing!!.copy(title = "Du PC"))
+		val vShown = (vController.screen as AppScreen.Opened).vault								// coffre affiché
+		assertEquals(listOf("Du PC", "Du téléphone"), vShown.items().map { it.title })
+		assertEquals(listOf("Du PC", "Du téléphone"), VaultStore(vFile).unlock("un mot de passe solide").items().map { it.title })
+		arrive("Encore du téléphone")
+		vController.reloadFromDisk()
+		assertEquals(listOf("Du PC", "Du téléphone", "Encore du téléphone"), (vController.screen as AppScreen.Opened).vault.items().map { it.title })
 	}
 
 	/*
