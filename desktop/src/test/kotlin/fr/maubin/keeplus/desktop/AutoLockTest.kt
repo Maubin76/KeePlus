@@ -1,11 +1,14 @@
 package fr.maubin.keeplus.desktop
 
+import fr.maubin.keeplus.settings.KeeSettings
+import fr.maubin.keeplus.settings.SettingsStore
 import fr.maubin.keeplus.ui.AppController
 import fr.maubin.keeplus.ui.AppScreen
 import fr.maubin.keeplus.ui.BiometricInvalidated
 import fr.maubin.keeplus.ui.BiometricUnlock
 import fr.maubin.keeplus.ui.kHiddenMillis
 import fr.maubin.keeplus.ui.kIdleMillis
+import fr.maubin.keeplus.vault.VaultBackups
 import fr.maubin.keeplus.vault.VaultStore
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -52,6 +55,14 @@ private class FakeBiometric : BiometricUnlock
 	override fun markOffered()
 	{
 		fOffered = true
+	}
+
+	/*
+		Proposition à refaire.
+	*/
+	override fun resetOffer()
+	{
+		fOffered = false
 	}
 
 	/*
@@ -137,6 +148,54 @@ class AutoLockTest
 		fTime += kHiddenMillis
 		vController.setHidden(false)
 		assertEquals(AppScreen.Locked, vController.screen)
+	}
+
+	/*
+		Délais réglés : 1 min d'inactivité, verrouillage aussitôt en
+		arrière-plan ; réglages enregistrés.
+	*/
+	@Test
+	fun settingsDriveLocking()
+	{
+		val vFile       = fFolder.root.resolve("reglages.json")									// fichier des réglages
+		val vController = runBlocking {
+			AppController(VaultStore(fFolder.root.resolve("coffre.kdbx")), { null }, fNow = { fTime }, fSettings = SettingsStore(vFile)).also {
+				it.open(it.create("Perso", "un mot de passe solide")!!)
+			}
+		}																							// coffre ouvert
+		vController.updateSettings(KeeSettings(idleMinutes = 1, hiddenSeconds = 0))
+		assertEquals(KeeSettings(idleMinutes = 1, hiddenSeconds = 0), SettingsStore(vFile).load())
+		fTime += 61_000
+		vController.checkAutoLock()
+		assertEquals(AppScreen.Locked, vController.screen)
+		vController.open(runBlocking { vController.unlock("un mot de passe solide")!! })
+		vController.setHidden(true)
+		assertEquals(AppScreen.Locked, vController.screen)
+	}
+
+	/*
+		Changement du mot de passe maître : l'ancien est refusé, l'empreinte
+		qui le gardait est désactivée et sera proposée de nouveau ; restauration
+		d'une sauvegarde : coffre verrouillé, ancien mot de passe.
+	*/
+	@Test
+	fun passwordChangeAndRestore() = runBlocking {
+		val vBiometric  = FakeBiometric().apply { fSecret = "un mot de passe solide"; fOffered = true }	// empreinte active
+		val vBackups    = VaultBackups(fFolder.root.resolve("sauvegardes"), 3)							// sauvegardes
+		val vController = AppController(VaultStore(fFolder.root.resolve("coffre.kdbx"), vBackups), { null }, vBiometric, fNow = { fTime })	// appli
+		vController.open(vController.create("Perso", "un mot de passe solide")!!)
+		assertEquals("Mot de passe actuel incorrect.", vController.changeMasterPassword("faux", "nouveau mot de passe solide"))
+		assertNull(vController.changeMasterPassword("un mot de passe solide", "nouveau mot de passe solide"))
+		assertFalse(vBiometric.enabled)
+		assertFalse(vBiometric.offered)
+		vController.lock()
+		assertNull(vController.unlock("un mot de passe solide"))
+		vController.open(vController.unlock("nouveau mot de passe solide")!!)
+		val vBackup = vController.backups().single()													// sauvegarde du jour (ancien mot de passe)
+		vController.restoreBackup(vBackup)
+		assertEquals(AppScreen.Locked, vController.screen)
+		assertNotNull(vController.error)
+		assertNotNull(vController.unlock("un mot de passe solide"))
 	}
 
 	/*

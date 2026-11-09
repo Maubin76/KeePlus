@@ -8,6 +8,9 @@ import androidx.compose.runtime.setValue
 import fr.maubin.keeplus.vault.EntryDraft
 import fr.maubin.keeplus.vault.Vault
 import fr.maubin.keeplus.vault.VaultException
+import fr.maubin.keeplus.settings.KeeSettings
+import fr.maubin.keeplus.settings.SettingsStore
+import fr.maubin.keeplus.vault.VaultBackup
 import fr.maubin.keeplus.vault.VaultStore
 import fr.maubin.keeplus.vault.decodeVault
 import fr.maubin.keeplus.vault.mergeVaults
@@ -113,19 +116,38 @@ sealed interface AppScreen
 	fBiometric : déverrouillage par empreinte ; null là où il n'existe pas (PC)
 	fNow       : horloge en millisecondes (verrouillage automatique)
 	fSync      : synchronisation vue par l'appli ; null sans
+	fSettings  : fichier des réglages ; null pour les réglages par défaut (tests)
 */
 class AppController(
 	private val fStore     : VaultStore,
 	private val fFiles     : VaultFiles,
 	private val fBiometric : BiometricUnlock? = null,
 	private val fNow       : () -> Long       = System::currentTimeMillis,
-	private val fSync      : SyncHooks?       = null
+	private val fSync      : SyncHooks?       = null,
+	private val fSettings  : SettingsStore?   = null
 )
 {
 	/*
 		Écran des appareils (synchronisation) affiché.
 	*/
 	var showDevices: Boolean by mutableStateOf(false)
+
+	/*
+		Écran des réglages affiché.
+	*/
+	var showSettings: Boolean by mutableStateOf(false)
+
+	/*
+		Réglages de l'appli.
+	*/
+	var settings: KeeSettings by mutableStateOf(fSettings?.load() ?: KeeSettings())
+		private set
+
+	/*
+		Vrai si l'appareil peut déverrouiller par l'empreinte (capteur et
+		empreinte enregistrée).
+	*/
+	val biometricAvailable: Boolean get() = fBiometric?.available == true
 
 	private var fLastActivity : Long       = fNow()										// dernier geste de l'utilisateur
 	private var fHiddenSince  : Long?      = null											// appli masquée depuis ; null si visible
@@ -202,7 +224,7 @@ class AppController(
 	*/
 	val canGoBack: Boolean
 		get() = screen == AppScreen.Create || screen is AppScreen.Import ||
-			(screen is AppScreen.Opened && (selected != null || editing != null || showDevices))
+			(screen is AppScreen.Opened && (selected != null || editing != null || showDevices || showSettings))
 
 	/*
 		Retour : quitte l'édition sans enregistrer, ferme la fiche ouverte, ou
@@ -216,6 +238,7 @@ class AppController(
 		{
 			editing != null            -> editing = null
 			showDevices                -> showDevices = false
+			showSettings               -> showSettings = false
 			screen is AppScreen.Opened -> selected = null
 			else                       -> screen = AppScreen.Welcome
 		}
@@ -338,6 +361,89 @@ class AppController(
 				saving = false
 			}
 		}
+	}
+
+	/*
+		Change les réglages et les enregistre.
+		inSettings : nouveaux réglages
+	*/
+	fun updateSettings(inSettings: KeeSettings)
+	{
+		settings = inSettings
+		runCatching { fSettings?.save(inSettings) }
+	}
+
+	/*
+		Sauvegardes automatiques du coffre, de la plus récente à la plus
+		ancienne ; aucune en démonstration.
+	*/
+	fun backups(): List<VaultBackup> = fStore.fBackups?.list().orEmpty()
+
+	/*
+		Dossier des sauvegardes ; null sans sauvegardes.
+	*/
+	val backupFolder: java.io.File? get() = fStore.fBackups?.folder
+
+	/*
+		Remet une sauvegarde à la place du coffre, puis verrouille : le coffre
+		restauré s'ouvre avec le mot de passe maître qu'il avait ce jour-là.
+		inBackup : sauvegarde
+	*/
+	suspend fun restoreBackup(inBackup: VaultBackup)
+	{
+		fSaveLock.withLock {
+			try
+			{
+				withContext(Dispatchers.IO) { fStore.restore(inBackup) }
+			}
+			catch (vError: Exception)
+			{
+				saveError = "Restauration impossible : ${vError.message ?: vError::class.simpleName}"
+				return@withLock
+			}
+			lock()
+			error = "Sauvegarde du ${inBackup.day.dayOfMonth}/${inBackup.day.monthValue}/${inBackup.day.year} restaurée : saisissez le mot de passe maître qu'avait le coffre ce jour-là."
+		}
+		fSync?.changed()
+	}
+
+	/*
+		Change le mot de passe maître du coffre ouvert ; rend null si c'est
+		fait, sinon la raison. L'empreinte, qui gardait l'ancien, est
+		désactivée et sera proposée de nouveau ; les autres appareils
+		demanderont le nouveau mot de passe.
+		inCurrent : mot de passe maître actuel
+		inNew     : nouveau mot de passe maître
+	*/
+	suspend fun changeMasterPassword(
+		inCurrent : CharSequence,
+		inNew     : CharSequence
+	): String?
+	{
+		val vOpened = screen as? AppScreen.Opened ?: return "Coffre verrouillé."					// coffre ouvert
+		if (vOpened.demo) return "Pas de changement de mot de passe en démonstration."
+		if (!vOpened.vault.isMasterPassword(inCurrent)) return "Mot de passe actuel incorrect."
+		apply(vOpened.vault.changeMasterPassword(inNew))
+		if (saveError != null) return saveError
+		fBiometric?.let { if (it.enabled) { it.disable(); it.resetOffer() } }
+		return null
+	}
+
+	/*
+		Désactive l'empreinte (mot de passe gardé et clé effacés).
+	*/
+	fun disableBiometric()
+	{
+		fBiometric?.disable()
+	}
+
+	/*
+		L'activation de l'empreinte sera proposée au prochain déverrouillage
+		par mot de passe.
+	*/
+	fun offerBiometricAgain()
+	{
+		fBiometric?.resetOffer()
 	}
 
 	/*
@@ -537,25 +643,26 @@ class AppController(
 		if (inHidden)
 		{
 			if (fHiddenSince == null) fHiddenSince = fNow()
+			if (settings.hiddenSeconds == 0) lock()
 			return
 		}
 		val vSince = fHiddenSince																// début de l'absence
 		fHiddenSince = null
-		if (vSince != null && fNow() - vSince >= kHiddenMillis) lock()
+		if (vSince != null && fNow() - vSince >= settings.hiddenSeconds * 1000L) lock()
 		touch()
 	}
 
 	/*
-		Verrouille si le coffre est ouvert et que l'utilisateur est inactif
-		depuis kIdleMillis, ou l'appli masquée depuis kHiddenMillis. Appelé
-		chaque seconde par l'interface.
+		Verrouille si le coffre est ouvert et que l'utilisateur est inactif, ou
+		l'appli masquée, depuis les délais réglés. Appelé chaque seconde par
+		l'interface.
 	*/
 	fun checkAutoLock()
 	{
 		if (screen !is AppScreen.Opened) return
 		val vNow = fNow()																	// maintenant
-		val vIdle   = vNow - fLastActivity >= kIdleMillis										// inactif trop longtemps
-		val vHidden = fHiddenSince?.let { vNow - it >= kHiddenMillis } == true					// masqué trop longtemps
+		val vIdle   = vNow - fLastActivity >= settings.idleMinutes * 60_000L					// inactif trop longtemps
+		val vHidden = fHiddenSince?.let { vNow - it >= settings.hiddenSeconds * 1000L } == true	// masqué trop longtemps
 		if (vIdle || vHidden) lock()
 	}
 
@@ -613,6 +720,7 @@ class AppController(
 		selected       = null
 		editing        = null
 		showDevices    = false
+		showSettings   = false
 		filter         = ListFilter.All
 		query.clearText()
 		fPending?.fill(Char(0))

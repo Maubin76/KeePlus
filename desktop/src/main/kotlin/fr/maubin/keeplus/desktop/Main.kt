@@ -27,6 +27,8 @@ import fr.maubin.keeplus.ui.VaultFiles
 import fr.maubin.keeplus.ui.theme.KeeColors
 import fr.maubin.keeplus.ui.theme.logoImage
 import fr.maubin.keeplus.sync.PcSync
+import fr.maubin.keeplus.settings.SettingsStore
+import fr.maubin.keeplus.vault.VaultBackups
 import fr.maubin.keeplus.vault.VaultStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -75,18 +77,20 @@ class DesktopFiles : VaultFiles
 	fenêtre garde l'appli dans la zone de notification (pour la
 	synchronisation avec le téléphone) ; « Quitter » dans le menu de l'icône
 	la ferme vraiment. Le coffre se verrouille avec la session Windows, et
-	60 s après que la fenêtre a été réduite ou fermée. La synchronisation
-	avec les téléphones écoute sur le réseau de la maison (réseau relu toutes
-	les 30 s).
+	selon les délais réglés après que la fenêtre a été réduite ou fermée.
+	Lancé avec Windows (--demarrage), il reste dans la zone de notification.
+	La synchronisation avec les téléphones écoute sur le réseau de la maison
+	(réseau relu toutes les 30 s).
 */
-fun main()
+fun main(inArgs: Array<String>)
 {
+	val vStartup  = inArgs.contains(kStartupArg)												// lancé avec Windows : fenêtre cachée
 	val vInstance = SingleInstance()															// une seule appli à la fois
-	if (!vInstance.claim()) exitProcess(0)
+	if (!vInstance.claim(inNotify = !vStartup)) exitProcess(0)
 	application {
 		val vScope      = rememberCoroutineScope()												// rechargement après une synchronisation
-		val vStore      = remember { VaultStore(File(dataDir(), "coffre.kdbx")) }					// coffre du PC
-		val vController = remember { AppController(vStore, DesktopFiles()) }						// état de l'appli
+		val vStore      = remember { VaultStore(File(dataDir(), "coffre.kdbx"), VaultBackups(backupDir(), 7)) }	// coffre du PC et ses sauvegardes
+		val vController = remember { AppController(vStore, DesktopFiles(), fSettings = SettingsStore(File(dataDir(), "reglages.json"))) }	// état de l'appli
 		val vSync       = remember {
 			PcSync(
 				fFile      = File(dataDir(), "appareils.json"),
@@ -108,7 +112,7 @@ fun main()
 		val vWindow     = rememberWindowState(size = DpSize(1200.dp, 780.dp), position = WindowPosition.Aligned(Alignment.Center))	// fenêtre
 		val vTray       = rememberTrayState()													// icône de la zone de notification
 		val vIcon       = remember { BitmapPainter(logoImage(64)) }								// logo
-		var vVisible    by remember { mutableStateOf(true) }									// fenêtre affichée
+		var vVisible    by remember { mutableStateOf(!vStartup) }								// fenêtre affichée (cachée au démarrage avec Windows)
 		var vTold       by remember { mutableStateOf(false) }									// notification « toujours là » déjà montrée
 		val vShow       by vInstance.requests.collectAsState()									// demandes d'une seconde instance
 		LaunchedEffect(vShow) { if (vShow > 0) vVisible = true }
@@ -150,10 +154,20 @@ fun main()
 				withTimeoutOrNull(2_000) { while (!window.isShowing) delay(16) }
 				if (window.isShowing) WindowFront.bring(window)
 			}
-			KeePlusApp(vController) { DevicesPanel(vSync) { vController.showDevices = false } }
+			KeePlusApp(
+				inController = vController,
+				inSettings   = { DesktopSettings(vController.backupFolder) },
+				inDevices    = { DevicesPanel(vSync) { vController.showDevices = false } }
+			)
 		}
 	}
 }
+
+/*
+	Dossier des sauvegardes du coffre, visible (copie facile sur une clé
+	USB) : Documents\KeePlus\Sauvegardes.
+*/
+fun backupDir(): File = File(System.getProperty("user.home"), "Documents/KeePlus/Sauvegardes")
 
 /*
 	Nom de ce PC : nom de l'ordinateur sous Windows, sinon nom d'hôte.

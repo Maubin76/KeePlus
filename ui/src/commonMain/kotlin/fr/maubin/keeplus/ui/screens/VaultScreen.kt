@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -72,7 +73,6 @@ import fr.maubin.keeplus.ui.components.OneLine
 import fr.maubin.keeplus.ui.components.SearchField
 import fr.maubin.keeplus.ui.icons.LineIcons
 import fr.maubin.keeplus.ui.platform.SecretClipboard
-import fr.maubin.keeplus.ui.platform.kClipboardSeconds
 import fr.maubin.keeplus.ui.platform.rememberSecretClipboard
 import fr.maubin.keeplus.ui.theme.KeeColors
 import fr.maubin.keeplus.ui.theme.KeeLogo
@@ -92,10 +92,12 @@ private val kListWidth  = 380.dp															// colonne de la liste (PC)
 	Actions communes à la liste et à la fiche : copie avec bandeau de
 	confirmation.
 	fClipboard : presse-papiers des secrets
+	fDelay     : délai d'effacement d'un secret, en secondes
 	fNotify    : affiche un bandeau
 */
 class CopyActions(
 	private val fClipboard : SecretClipboard,
+	private val fDelay     : Int,
 	private val fNotify    : (String) -> Unit
 )
 {
@@ -112,8 +114,8 @@ class CopyActions(
 	)
 	{
 		if (inText.isEmpty()) return
-		fClipboard.copy(inLabel, inText, inSecret)
-		fNotify(if (inSecret) "$inLabel copié — effacé dans $kClipboardSeconds s" else "$inLabel copié")
+		fClipboard.copy(inLabel, inText, inSecret, fDelay)
+		fNotify(if (inSecret) "$inLabel copié — effacé dans $fDelay s" else "$inLabel copié")
 	}
 }
 
@@ -129,20 +131,22 @@ class CopyActions(
 	inVault      : coffre ouvert
 	inDemo       : coffre de démonstration
 	inDevices    : écran des appareils (synchronisation), propre à la plateforme ; null sans
+	inSettings   : réglages propres à la plateforme, ajoutés à la page Réglages ; null sans
 */
 @Composable
 fun VaultScreen(
 	inController : AppController,
 	inVault      : Vault,
 	inDemo       : Boolean,
-	inDevices    : (@Composable () -> Unit)? = null
+	inDevices    : (@Composable () -> Unit)?               = null,
+	inSettings   : (@Composable ColumnScope.() -> Unit)?   = null
 )
 {
 	val vScope   = rememberCoroutineScope()													// actions sur le coffre
 	var vNotice  by remember { mutableStateOf<String?>(null) }								// bandeau affiché
 	var vStamp   by remember { mutableStateOf(0) }											// numéro du bandeau, pour relancer le délai
 	val vNotify  = { vText: String -> vNotice = vText; vStamp += 1 }							// affiche un bandeau
-	val vCopy    = CopyActions(rememberSecretClipboard(), vNotify)							// copies
+	val vCopy    = CopyActions(rememberSecretClipboard(), inController.settings.clipboardSeconds, vNotify)							// copies
 	val vActions = EntryActions(
 		edit    = inController::startEdit,
 		trash   = { vId ->
@@ -207,7 +211,8 @@ fun VaultScreen(
 			.focusRequester(vRoot)
 			.focusable()
 	) {
-		val vDevices = inDevices?.takeIf { inController.showDevices && !inDemo }				// écran des appareils affiché
+		val vSettingsPage: @Composable () -> Unit = { SettingsScreen(inController, inDemo, inSettings) { inController.showSettings = false } }	// page des réglages
+		val vDevices = if (inController.showSettings) vSettingsPage else inDevices?.takeIf { inController.showDevices && !inDemo }	// page affichée à la place du contenu
 		if (maxWidth >= kWideMin) WideVault(inController, inVault, inDemo, vItems, vCopy, vActions, vSearch, vDevices, inDevices != null && !inDemo)
 		else if (vDevices != null) vDevices()
 		else CompactVault(inController, inVault, inDemo, vItems, vCopy, vActions, vSearch, inDevices != null && !inDemo)
@@ -285,6 +290,7 @@ private fun CompactVault(
 							SaveStatus(inController)
 						}
 						if (inHasDevices) IconAction(LineIcons.Devices, "Appareils", { inController.showDevices = true }, inTint = KeeColors.text)
+						IconAction(LineIcons.Settings, "Réglages", { inController.showSettings = true }, inTint = KeeColors.text)
 						IconAction(LineIcons.Lock, "Verrouiller", inController::lock, inTint = KeeColors.text)
 					}
 					if (inDemo) DemoBadge(Modifier.padding(start = 20.dp, top = 4.dp))
@@ -393,7 +399,7 @@ private fun SaveStatus(inController: AppController)
 
 /*
 	Colonne des groupes (PC) : marque, nom du coffre, Tout, groupes avec leur
-	nombre d'entrées, Corbeille, et en bas Appareils et Verrouiller.
+	nombre d'entrées, Corbeille, et en bas Appareils, Réglages et Verrouiller.
 */
 @Composable
 private fun GroupColumn(
@@ -435,7 +441,8 @@ private fun GroupColumn(
 				GroupRow(LineIcons.Trash, "Corbeille", vTrash, 0, inController.filter == ListFilter.Trash) { inController.filter = ListFilter.Trash }
 			}
 		}
-		if (inHasDevices) GroupRow(LineIcons.Devices, "Appareils", null, 0, inController.showDevices) { inController.showDevices = !inController.showDevices }
+		if (inHasDevices) GroupRow(LineIcons.Devices, "Appareils", null, 0, inController.showDevices && !inController.showSettings) { inController.showSettings = false; inController.showDevices = !inController.showDevices }
+		GroupRow(LineIcons.Settings, "Réglages", null, 0, inController.showSettings) { inController.showSettings = !inController.showSettings }
 		GroupRow(LineIcons.Lock, "Verrouiller", null, 0, false, inController::lock)
 	}
 }

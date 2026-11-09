@@ -22,17 +22,19 @@ private class DesktopClipboard : SecretClipboard
 		inLabel  : nom de la donnée (inutilisé sur PC)
 		inText   : texte copié
 		inSecret : effacer après le délai
+		inDelay  : délai d'effacement, en secondes
 	*/
 	override fun copy(
 		inLabel  : String,
 		inText   : String,
-		inSecret : Boolean
+		inSecret : Boolean,
+		inDelay  : Int
 	)
 	{
 		val vBoard = Toolkit.getDefaultToolkit().systemClipboard							// presse-papiers du système
 		vBoard.setContents(StringSelection(inText), null)
 		if (!inSecret) return
-		fTimer.schedule(kClipboardSeconds * 1000L) {
+		fTimer.schedule(inDelay * 1000L) {
 			val vNow = runCatching { vBoard.getData(DataFlavor.stringFlavor) as? String }.getOrNull()	// contenu actuel
 			if (vNow == inText) vBoard.setContents(StringSelection(""), null)
 		}

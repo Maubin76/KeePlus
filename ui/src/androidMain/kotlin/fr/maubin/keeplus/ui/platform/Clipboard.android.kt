@@ -33,11 +33,13 @@ private class AndroidClipboard(inContext: Context) : SecretClipboard
 		inLabel  : nom de la donnée
 		inText   : texte copié
 		inSecret : marquer sensible et effacer après le délai
+		inDelay  : délai d'effacement, en secondes
 	*/
 	override fun copy(
 		inLabel  : String,
 		inText   : String,
-		inSecret : Boolean
+		inSecret : Boolean,
+		inDelay  : Int
 	)
 	{
 		val vClip = ClipData.newPlainText(inLabel, inText)									// donnée copiée
@@ -50,7 +52,7 @@ private class AndroidClipboard(inContext: Context) : SecretClipboard
 		val vNumber = ++fLast																// numéro de cette copie
 		if (inSecret)
 		{
-			fHandler.postDelayed({ if (fLast == vNumber) runCatching { fBoard.clearPrimaryClip() } }, kClipboardSeconds * 1000L)
+			fHandler.postDelayed({ if (fLast == vNumber) runCatching { fBoard.clearPrimaryClip() } }, inDelay * 1000L)
 		}
 	}
 }

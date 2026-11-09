@@ -35,6 +35,12 @@ interface BiometricUnlock
 	fun markOffered()
 
 	/*
+		L'activation sera proposée de nouveau au prochain déverrouillage par
+		mot de passe.
+	*/
+	fun resetOffer()
+
+	/*
 		Active l'empreinte : demande l'empreinte, puis garde le mot de passe
 		chiffré. Faux si l'utilisateur annule.
 		inPassword : mot de passe maître

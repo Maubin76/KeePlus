@@ -15,6 +15,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
+import fr.maubin.keeplus.settings.SettingsStore
 import fr.maubin.keeplus.ui.AppController
 import fr.maubin.keeplus.ui.KeePlusApp
 import fr.maubin.keeplus.ui.PickedFile
@@ -23,6 +24,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 
 /*
 	Activité unique de KeePlus. Écran protégé (FLAG_SECURE) : ni capture, ni
@@ -69,7 +71,7 @@ class MainActivity : FragmentActivity(), VaultFiles
 		window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
 		enableEdgeToEdge(SystemBarStyle.dark(android.graphics.Color.TRANSPARENT), SystemBarStyle.dark(android.graphics.Color.TRANSPARENT))
 		fSync       = AndroidSync.get(this)
-		fController = AppController(fSync.fStore, this, AndroidBiometric(this), fSync = fSync)
+		fController = AppController(fSync.fStore, this, AndroidBiometric(this), fSync = fSync, fSettings = SettingsStore(File(filesDir, "reglages.json")))
 		registerReceiver(fScreenOff, IntentFilter(Intent.ACTION_SCREEN_OFF))
 		scheduleSync(this)
 		lifecycleScope.launch {
@@ -80,7 +82,11 @@ class MainActivity : FragmentActivity(), VaultFiles
 		}																						// coffre remplacé ou en attente de fusion
 		setContent {
 			BackHandler(enabled = fController.canGoBack) { fController.back() }
-			KeePlusApp(fController) { DevicesScreen(fSync) { fController.showDevices = false } }
+			KeePlusApp(
+				inController = fController,
+				inSettings   = { PhoneSettings(fSync.fStore) },
+				inDevices    = { DevicesScreen(fSync) { fController.showDevices = false } }
+			)
 		}
 	}
 

@@ -3,6 +3,7 @@ package fr.maubin.keeplus.ui
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -27,12 +28,14 @@ import kotlinx.coroutines.launch
 	À l'ouverture du coffre, les coffres d'autres appareils en attente sont
 	fusionnés.
 	inController : état de l'appli
+	inSettings   : réglages propres à la plateforme, ajoutés à la page Réglages ; null sans
 	inDevices    : écran des appareils (synchronisation), propre à la plateforme ; null sans
 */
 @Composable
 fun KeePlusApp(
 	inController : AppController,
-	inDevices    : (@Composable () -> Unit)? = null
+	inSettings   : (@Composable ColumnScope.() -> Unit)? = null,
+	inDevices    : (@Composable () -> Unit)?             = null
 )
 {
 	val vScope = rememberCoroutineScope()													// opérations lancées par les écrans
@@ -97,7 +100,7 @@ fun KeePlusApp(
 						inOnDemo   = { vScope.launch { inController.openDemo() } },
 						inOnFinger = if (inController.biometricReady) inController::unlockWithBiometric else null
 					)
-					is AppScreen.Opened -> VaultScreen(inController, vScreen.vault, vScreen.demo, inDevices)
+					is AppScreen.Opened -> VaultScreen(inController, vScreen.vault, vScreen.demo, inDevices, inSettings)
 				}
 			}
 			if (inController.offerBiometric && inController.screen is AppScreen.Opened)

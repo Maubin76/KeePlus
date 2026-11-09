@@ -16,6 +16,7 @@ import fr.maubin.keeplus.sync.PendingMerge
 import fr.maubin.keeplus.sync.PhonePeers
 import fr.maubin.keeplus.sync.PhoneSync
 import fr.maubin.keeplus.ui.SyncHooks
+import fr.maubin.keeplus.vault.VaultBackups
 import fr.maubin.keeplus.vault.VaultStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -328,7 +329,7 @@ class AndroidSync private constructor(
 			fInstance ?: synchronized(this) {
 				fInstance ?: run {
 					val vApp   = inContext.applicationContext											// contexte de l'application
-					val vStore = VaultStore(File(vApp.filesDir, "coffre.kdbx"))							// coffre du téléphone
+					val vStore = VaultStore(File(vApp.filesDir, "coffre.kdbx"), VaultBackups(File(vApp.filesDir, "sauvegardes"), 3))	// coffre du téléphone et ses sauvegardes
 					AndroidSync(vApp, vStore, PhoneSync(File(vApp.filesDir, "synchro"), vStore, phoneName(vApp), BuildConfig.VERSION_NAME))
 				}.also { fInstance = it }
 			}

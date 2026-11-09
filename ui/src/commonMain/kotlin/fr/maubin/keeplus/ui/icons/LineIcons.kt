@@ -195,6 +195,20 @@ object LineIcons
 		"M6 20 V16 H10"
 	)
 
+	// Réglages : curseurs.
+	val Settings: ImageVector = lineIcon(
+		"Réglages",
+		"M4.5 7 H13",
+		"M17 7 H19.5",
+		"M15 5 V9",
+		"M4.5 12 H7",
+		"M11 12 H19.5",
+		"M9 10 V14",
+		"M4.5 17 H13",
+		"M17 17 H19.5",
+		"M15 15 V19"
+	)
+
 	// Attention : cercle et point d'exclamation.
 	val Alert: ImageVector = lineIcon(
 		"Attention",

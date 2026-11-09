@@ -6,6 +6,7 @@ import app.keemobile.kotpass.constants.PredefinedIcon
 import app.keemobile.kotpass.cryptography.EncryptedValue
 import app.keemobile.kotpass.database.KeePassDatabase
 import app.keemobile.kotpass.database.modifiers.modifyContent
+import app.keemobile.kotpass.database.modifiers.modifyCredentials
 import app.keemobile.kotpass.models.DeletedObject
 import app.keemobile.kotpass.models.Entry
 import app.keemobile.kotpass.models.EntryFields
@@ -362,6 +363,21 @@ class Vault(
 			fClock
 		)
 	}
+
+	/*
+		Vrai si ce mot de passe est le mot de passe maître du coffre.
+		inPassword : mot de passe à vérifier
+	*/
+	fun isMasterPassword(inPassword: CharSequence): Boolean =
+		database.credentials.passphrase?.getBinary()?.contentEquals(vaultCredentials(inPassword).passphrase?.getBinary()) == true
+
+	/*
+		Change le mot de passe maître : le coffre sera chiffré avec la nouvelle
+		clé au prochain enregistrement.
+		inPassword : nouveau mot de passe maître
+	*/
+	fun changeMasterPassword(inPassword: CharSequence): Vault =
+		Vault(database.modifyCredentials { vaultCredentials(inPassword) }.modifyContent { copy(meta = meta.copy(masterKeyChanged = now())) }, fClock)
 
 	/*
 		Vrai si le groupe est la corbeille ou se trouve dedans.

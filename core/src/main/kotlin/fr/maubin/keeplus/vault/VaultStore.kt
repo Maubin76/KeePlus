@@ -17,10 +17,15 @@ private val kFileLock = Any()															// accès au fichier du coffre, pour
 	Le fichier peut être remplacé par la synchronisation (voir VaultFile) :
 	l'appli retient l'empreinte du dernier coffre qu'elle a lu ou écrit, et
 	n'écrase jamais un coffre arrivé entre-temps (voir save).
-	fFile  : fichier du coffre
-	fKnown : empreinte du dernier coffre lu ou écrit par l'appli ; null avant
+	Avant la première modification du jour, le coffre est sauvegardé.
+	fFile    : fichier du coffre
+	fBackups : sauvegardes automatiques ; null sans
+	fKnown   : empreinte du dernier coffre lu ou écrit par l'appli ; null avant
 */
-class VaultStore(private val fFile: File) : VaultFile
+class VaultStore(
+	private val fFile    : File,
+	val fBackups         : VaultBackups? = null
+) : VaultFile
 {
 	@Volatile private var fKnown: String? = null
 
@@ -120,10 +125,24 @@ class VaultStore(private val fFile: File) : VaultFile
 		inBytes    : ByteArray,
 		inExpected : String?
 	): Boolean = synchronized(kFileLock) {
-		val vNow = read()?.let(::vaultFingerprint)											// empreinte actuelle
-		if (vNow != inExpected) return false
+		val vNow = read()																	// coffre actuel
+		if (vNow?.let(::vaultFingerprint) != inExpected) return false
+		vNow?.let { fBackups?.daily(it) }
 		writeAtomic(fFile, inBytes)
 		true
+	}
+
+	/*
+		Remet une sauvegarde à la place du coffre (le coffre actuel est
+		d'abord sauvegardé, si ce n'est déjà fait aujourd'hui). Le coffre
+		restauré s'ouvre avec le mot de passe maître qu'il avait.
+		inBackup : sauvegarde
+	*/
+	fun restore(inBackup: VaultBackup)
+	{
+		val vBytes = inBackup.file.readBytes()												// contenu de la sauvegarde
+		if (!isKeePassFile(vBytes)) throw VaultException.NotKeePass(IllegalStateException(inBackup.file.name))
+		write(vBytes)
 	}
 
 	/*
@@ -131,6 +150,7 @@ class VaultStore(private val fFile: File) : VaultFile
 		inBytes : contenu
 	*/
 	private fun write(inBytes: ByteArray) = synchronized(kFileLock) {
+		read()?.let { fBackups?.daily(it) }
 		writeAtomic(fFile, inBytes)
 		fKnown = vaultFingerprint(inBytes)
 	}

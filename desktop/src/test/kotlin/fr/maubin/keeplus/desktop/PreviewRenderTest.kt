@@ -90,5 +90,8 @@ class PreviewRenderTest
 		vController.cancelEdit()
 		vController.startNew()
 		render("nouvelle") { VaultScreen(vController, vOpened.vault, true) }
+		vController.cancelEdit()
+		vController.showSettings = true
+		render("reglages") { VaultScreen(vController, vOpened.vault, false) }
 	}
 }

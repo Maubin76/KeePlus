@@ -69,6 +69,14 @@ class AndroidBiometric(private val fActivity: FragmentActivity) : BiometricUnloc
 	}
 
 	/*
+		Activation à proposer de nouveau.
+	*/
+	override fun resetOffer()
+	{
+		fPrefs.edit().putBoolean(kOffered, false).apply()
+	}
+
+	/*
 		Active l'empreinte : clé neuve, empreinte demandée, mot de passe chiffré
 		et gardé.
 		inPassword : mot de passe maître
