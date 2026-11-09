@@ -37,9 +37,18 @@ dependencies {
 val kVersion = property("keeplus.version").toString()								// version affichée
 val kPackage = (kVersion.split('.') + listOf("0", "0", "0")).take(3).joinToString(".")	// version du paquet
 
+// Tests sans écran, comme sur la CI (Linux) : une fenêtre AWT y serait refusée.
+tasks.withType<Test>().configureEach {
+	systemProperty("java.awt.headless", "true")
+}
+
 compose.desktop {
 	application {
 		mainClass = "fr.maubin.keeplus.desktop.MainKt"
+		// JDK de l'empaquetage (jpackage) : celui de Gradle par défaut (CI) ; en local, si
+		// Gradle tourne sur le JDK d'Android Studio (sans jpackage) :
+		// ./gradlew :desktop:packageZip -Pkeeplus.packagingJdk=C:/Java/current
+		findProperty("keeplus.packagingJdk")?.let { javaHome = it.toString() }
 
 		nativeDistributions {
 			targetFormats(TargetFormat.Msi)
@@ -55,4 +64,15 @@ compose.desktop {
 			}
 		}
 	}
+}
+
+// Dossier portable zippé : KeePlus.exe et sa JVM, à dézipper n'importe où, sans
+// installation ni droits administrateur (pas de WiX nécessaire, contrairement au .msi).
+tasks.register<Zip>("packageZip") {
+	group       = "distribution"
+	description = "Construit le dossier portable de l'appli PC et le zippe."
+	dependsOn("createDistributable")
+	from(layout.buildDirectory.dir("compose/binaries/main/app"))
+	archiveFileName.set("KeePlus-$kVersion-windows.zip")
+	destinationDirectory.set(layout.buildDirectory.dir("distributions"))
 }

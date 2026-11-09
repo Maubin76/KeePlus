@@ -1,8 +1,18 @@
+import java.util.Properties
+
 // Module application Android : Kotlin (intégré à AGP 9), Compose.
 plugins {
 	alias(libs.plugins.android.application)
 	alias(libs.plugins.kotlin.compose)
 }
+
+// Clé de signature des versions publiées : lue dans le gradle.properties de
+// l'utilisateur, dans local.properties (jamais versionnés) ou passée par la CI
+// (-Pkeeplus.keystore=…). Absente : la version release est signée avec la clé
+// de debug, et ne peut pas mettre à jour une appli signée autrement.
+val kLocal    = Properties().apply { rootProject.file("local.properties").takeIf { it.exists() }?.reader()?.use { load(it) } }	// local.properties
+val kSigning  = { inName: String -> (findProperty("keeplus.$inName") ?: kLocal.getProperty("keeplus.$inName"))?.toString() }	// réglage de signature
+val kKeystore = kSigning("keystore")?.let { file(it) }?.takeIf { it.exists() }		// fichier de la clé
 
 android {
 	namespace  = "fr.maubin.keeplus"
@@ -16,13 +26,25 @@ android {
 		versionName   = property("keeplus.version").toString()
 	}
 
+	signingConfigs {
+		if (kKeystore != null)
+		{
+			create("publication") {
+				storeFile     = kKeystore
+				storePassword = kSigning("keyPassword")
+				keyAlias      = kSigning("keyAlias")
+				keyPassword   = kSigning("keyPassword")
+			}
+		}
+	}
+
 	buildTypes {
-		// Version optimisée (R8) ; signée avec la clé de debug tant qu'aucune clé de
-		// publication n'est configurée.
+		// Version optimisée (R8), signée avec la clé de publication : les mises à jour
+		// s'installent par-dessus sans perdre le coffre. Sans clé, clé de debug.
 		release {
 			isMinifyEnabled   = true
 			isShrinkResources = true
-			signingConfig     = signingConfigs.getByName("debug")
+			signingConfig     = signingConfigs.findByName("publication") ?: signingConfigs.getByName("debug")
 			proguardFiles(
 				getDefaultProguardFile("proguard-android-optimize.txt"),
 				"proguard-rules.pro"

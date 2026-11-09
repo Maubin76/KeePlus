@@ -1,0 +1,217 @@
+# Intégration continue de KeePlus : à chaque push sur main, lance toute la suite
+# de tests (module commun, appli PC, appli Android), puis publie une version :
+#
+# - Version : celle de gradle.properties est publiée telle quelle si son tag
+#   n'existe pas encore (première version 1.0, ou numéro changé à la main) ;
+#   sinon elle augmente de 0.1 (1.0 → 1.1, numéro Android + 1), commitée sur
+#   main par la CI avec [skip ci] (pensez à « git pull » avant le push suivant).
+# - APK release (R8), signé avec la clé des secrets KEYSTORE_BASE64, KEY_ALIAS
+#   et KEY_PASSWORD. Sans eux : clé jetable de la CI et avertissement (un tel
+#   APK ne peut pas mettre à jour l'appli installée).
+# - Appli PC : dossier portable zippé avec KeePlus.exe et sa JVM (Windows).
+# - Release GitHub « vX.Y » avec les deux fichiers.
+#
+# Lançable aussi à la main depuis l'onglet Actions (workflow_dispatch).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Exécutions à la suite, sans en interrompre une : une publication coupée en
+# plein milieu laisserait une version commitée sans ses fichiers.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v7
+
+      - name: Installer le JDK 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Préparer Gradle (avec cache)
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Lancer tous les tests
+        run: ./gradlew :core:test :desktop:test :app:testDebugUnitTest --stacktrace
+
+      - name: Joindre les rapports de tests en cas d'échec
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: rapports-tests
+          path: |
+            core/build/reports/tests/
+            core/build/test-results/
+            desktop/build/reports/tests/
+            desktop/build/test-results/
+            app/build/reports/tests/
+            app/build/test-results/
+          retention-days: 14
+
+  version:
+    name: Numéro de version
+    needs: tests
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.bump.outputs.version }}
+      sha: ${{ steps.bump.outputs.sha }}
+
+    steps:
+      - name: Récupérer le code et les tags
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Augmenter la version si elle est déjà publiée
+        id: bump
+        run: |
+          vVersion=$(grep '^keeplus.version=' gradle.properties | cut -d= -f2 | tr -d '\r')
+          vCode=$(grep '^keeplus.versionCode=' gradle.properties | cut -d= -f2 | tr -d '\r')
+          if git rev-parse -q --verify "refs/tags/v$vVersion" > /dev/null
+          then
+            vMajor=$(echo "$vVersion" | cut -d. -f1)
+            vMinor=$(echo "$vVersion" | cut -d. -f2)
+            vVersion="$vMajor.$((vMinor + 1))"
+            vCode=$((vCode + 1))
+            sed -i "s/^keeplus.version=.*/keeplus.version=$vVersion/; s/^keeplus.versionCode=.*/keeplus.versionCode=$vCode/" gradle.properties
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -q -am "chore(version): $vVersion [skip ci]"
+            git push origin HEAD:refs/heads/main
+          fi
+          echo "version=$vVersion" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "Version publiée : $vVersion (code $vCode)"
+
+  android:
+    name: APK Android
+    needs: version
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Récupérer le code de la version
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.version.outputs.sha }}
+
+      - name: Installer le JDK 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Préparer Gradle (avec cache)
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Construire l'APK release
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ] && [ -n "$KEY_ALIAS" ] && [ -n "$KEY_PASSWORD" ]
+          then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/keeplus.jks"
+            ./gradlew :app:assembleRelease \
+              "-Pkeeplus.keystore=$RUNNER_TEMP/keeplus.jks" \
+              "-Pkeeplus.keyAlias=$KEY_ALIAS" \
+              "-Pkeeplus.keyPassword=$KEY_PASSWORD"
+            rm "$RUNNER_TEMP/keeplus.jks"
+          else
+            echo "::warning::Secrets KEYSTORE_BASE64, KEY_ALIAS et KEY_PASSWORD absents : APK signé avec une clé jetable, qui ne peut pas mettre à jour l'appli installée."
+            ./gradlew :app:assembleRelease
+          fi
+          mv app/build/outputs/apk/release/app-release.apk "KeePlus-${{ needs.version.outputs.version }}.apk"
+
+      - name: Garder l'APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: apk
+          path: KeePlus-*.apk
+          retention-days: 7
+
+  desktop:
+    name: Appli PC (exe)
+    needs: version
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Récupérer le code de la version
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.version.outputs.sha }}
+
+      - name: Installer le JDK 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Préparer Gradle (avec cache)
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Construire le dossier portable zippé
+        shell: bash
+        run: ./gradlew :desktop:packageZip
+
+      - name: Contrôler le contenu du zip
+        shell: bash
+        run: |
+          mkdir -p controle && unzip -q desktop/build/distributions/KeePlus-*-windows.zip -d controle
+          test -f controle/KeePlus/KeePlus.exe || { echo "::error::KeePlus.exe absent du zip"; exit 1; }
+
+      - name: Garder le zip
+        uses: actions/upload-artifact@v7
+        with:
+          name: zip
+          path: desktop/build/distributions/KeePlus-*-windows.zip
+          retention-days: 7
+
+  release:
+    name: Release GitHub
+    needs: [version, android, desktop]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+
+    steps:
+      - name: Récupérer l'APK et le zip
+        uses: actions/download-artifact@v7
+        with:
+          path: fichiers
+          merge-multiple: true
+
+      - name: Publier la release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+          SHA: ${{ needs.version.outputs.sha }}
+        run: |
+          gh release create "v$VERSION" fichiers/* \
+            --repo "${{ github.repository }}" \
+            --target "$SHA" \
+            --title "KeePlus $VERSION" \
+            --notes "Version $VERSION : APK Android et appli PC portable (dézipper, lancer KeePlus.exe)."
