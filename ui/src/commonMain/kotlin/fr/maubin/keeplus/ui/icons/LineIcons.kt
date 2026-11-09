@@ -167,6 +167,15 @@ object LineIcons
 		"M6.5 3 V6.8 H10.3"
 	)
 
+	// Empreinte : arcs concentriques.
+	val Fingerprint: ImageVector = lineIcon(
+		"Empreinte",
+		"M6.5 7.5 A7 7 0 0 1 17.5 7.5",
+		"M5 12 A7 7 0 0 1 19 12 V13.5",
+		"M8 18 A11 11 0 0 1 8 12 A4 4 0 0 1 16 12 V14 A8 8 0 0 1 15 18.5",
+		"M12 12 V14.5 A10 10 0 0 1 10.5 20"
+	)
+
 	// Attention : cercle et point d'exclamation.
 	val Alert: ImageVector = lineIcon(
 		"Attention",

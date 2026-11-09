@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
+import fr.maubin.keeplus.ui.components.GhostButton
 import fr.maubin.keeplus.ui.components.SecretField
 import fr.maubin.keeplus.ui.components.SilverButton
 import fr.maubin.keeplus.ui.components.TextLink
@@ -47,6 +48,8 @@ private const val kFadeDelay  = 300														// départ de la dissipation ap
 	inOnTyping : saisie reprise (efface l'erreur)
 	inOnDone   : coffre ouvert, à afficher (après l'animation)
 	inOnDemo   : ouvrir le coffre de démonstration ; null pour ne pas le proposer
+	inOnFinger : ouvre le coffre par l'empreinte (null si annulé) ; null si
+	             l'empreinte n'est pas active. Proposée d'emblée à l'affichage.
 */
 @Composable
 fun UnlockScreen(
@@ -57,7 +60,8 @@ fun UnlockScreen(
 	inOnUnlock : suspend (CharSequence) -> Vault?,
 	inOnTyping : () -> Unit,
 	inOnDone   : (Vault) -> Unit,
-	inOnDemo   : (() -> Unit)? = null
+	inOnDemo   : (() -> Unit)? = null,
+	inOnFinger : (suspend () -> Vault?)? = null
 )
 {
 	val vScope    = rememberCoroutineScope()												// ouverture et animations
@@ -68,18 +72,24 @@ fun UnlockScreen(
 	val vGlow     = remember { Animatable(-1f) }											// vague de la grille
 	val vFade     = remember { Animatable(0f) }												// dissipation du décor
 	val vShake    = remember { Animatable(0f) }												// tremblement du champ (dp)
-	LaunchedEffect(Unit) { runCatching { vFocus.requestFocus() } }
 	LaunchedEffect(vPassword.text) { if (inError != null) inOnTyping() }
 	/*
-		Tente l'ouverture et joue l'animation qui suit.
+		Tente une ouverture et joue l'animation qui suit : déverrouillage
+		réussi, ou tremblement et double vibration en cas d'échec.
+		inOpen   : ouverture ; null en cas d'échec ou d'abandon
+		inSignal : signaler un échec (pas pour une empreinte annulée)
 	*/
-	fun submit()
+	fun attempt(
+		inOpen   : suspend () -> Vault?,
+		inSignal : () -> Boolean
+	)
 	{
-		if (inBusy || vPassword.text.isEmpty() || vFade.value > 0f) return
+		if (inBusy || vFade.value > 0f) return
 		vScope.launch {
-			val vVault = inOnUnlock(vPassword.text)											// coffre ouvert
+			val vVault = inOpen()																// coffre ouvert
 			if (vVault == null)
 			{
+				if (!inSignal()) return@launch
 				vHaptic.performHapticFeedback(HapticFeedbackType.Reject)
 				if (vAnimated)
 				{
@@ -103,11 +113,35 @@ fun UnlockScreen(
 			inOnDone(vVault)
 		}
 	}
+	/*
+		Ouverture par le mot de passe saisi.
+	*/
+	fun submit()
+	{
+		if (vPassword.text.isEmpty()) return
+		attempt({ inOnUnlock(vPassword.text) }, { true })
+	}
+	/*
+		Ouverture par l'empreinte ; un abandon ne fait ni trembler ni vibrer.
+	*/
+	fun finger()
+	{
+		val vFinger = inOnFinger ?: return															// ouverture par l'empreinte
+		attempt(vFinger, { false })
+	}
+	LaunchedEffect(Unit) {
+		if (inOnFinger != null)
+		{
+			delay(250)
+			finger()
+		}
+		else runCatching { vFocus.requestFocus() }
+	}
 	KeyScreen(inGlow = vGlow.value, inFade = vFade.value, inOnBack = inOnBack) {
 		if (inFileName == null) HeroTitle("Déverrouillez\n", "votre ", "coffre.")
 		else HeroTitle("Reprenez\n", "ce ", "coffre.")
 		BasicText(
-			if (inFileName == null) "Saisissez votre mot de passe maître."
+			if (inFileName == null) (if (inOnFinger != null) "Touchez le capteur, ou saisissez votre mot de passe maître." else "Saisissez votre mot de passe maître.")
 			else "« $inFileName » deviendra le coffre de cet appareil. Saisissez son mot de passe : le fichier d'origine n'est pas modifié.",
 			style = keeType().bodySmall
 		)
@@ -123,6 +157,7 @@ fun UnlockScreen(
 		ErrorLine(inError)
 		Spacer(Modifier.height(4.dp))
 		SilverButton(if (inBusy) "Ouverture…" else "Déverrouiller", ::submit, inEnabled = !inBusy && vPassword.text.isNotEmpty())
+		if (inOnFinger != null) GhostButton("Utiliser l'empreinte", { finger() }, inEnabled = !inBusy)
 		if (inOnBack != null && inFileName != null) TextLink("Choisir un autre fichier", inOnBack, Modifier.align(Alignment.CenterHorizontally))
 		if (inOnDemo != null) TextLink("Voir le coffre de démonstration", inOnDemo, Modifier.align(Alignment.CenterHorizontally))
 	}

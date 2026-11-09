@@ -65,7 +65,7 @@ class PreviewRenderTest
 	@Test
 	fun renderVault()
 	{
-		val vController = AppController(VaultStore(File("build/previews/absent.kdbx"))) { null }	// appli sans coffre
+		val vController = AppController(VaultStore(File("build/previews/absent.kdbx")), { null })	// appli sans coffre
 		runBlocking { vController.openDemo() }
 		val vOpened = vController.screen as AppScreen.Opened										// démonstration ouverte
 		render("coffre") { VaultScreen(vController, vOpened.vault, true) }

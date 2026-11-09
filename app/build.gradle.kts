@@ -51,6 +51,8 @@ dependencies {
 	implementation(libs.androidx.compose.ui.tooling.preview)
 	implementation(libs.androidx.compose.material3)
 	implementation(libs.kotlinx.coroutines.android)
+	implementation(libs.androidx.biometric)													// déverrouillage par empreinte
+	implementation(libs.androidx.fragment.ktx)												// BiometricPrompt demande une FragmentActivity
 	debugImplementation(libs.androidx.compose.ui.tooling)
 
 	testImplementation(libs.junit)

@@ -32,7 +32,7 @@ class AppFlowTest
 	@Test
 	fun createLockUnlock() = runBlocking {
 		val vFile       = fFolder.root.resolve("coffre.kdbx")									// coffre de l'appareil
-		val vController = AppController(VaultStore(vFile)) { null }							// appli sans sélecteur
+		val vController = AppController(VaultStore(vFile), { null })							// appli sans sélecteur
 		assertEquals(AppScreen.Welcome, vController.screen)
 		vController.startCreate()
 		val vVault = vController.create("Perso", "un mot de passe solide")!!				// coffre créé
@@ -46,7 +46,7 @@ class AppFlowTest
 		assertNotNull(vOpened)
 		assertNull(vController.error)
 		assertEquals("Perso", vOpened!!.name)
-		assertEquals(AppScreen.Locked, AppController(VaultStore(vFile)) { null }.screen)
+		assertEquals(AppScreen.Locked, AppController(VaultStore(vFile), { null }).screen)
 	}
 
 	/*
@@ -57,7 +57,7 @@ class AppFlowTest
 	@Test
 	fun editingIsSaved() = runBlocking {
 		val vFile       = fFolder.root.resolve("coffre.kdbx")									// coffre de l'appareil
-		val vController = AppController(VaultStore(vFile)) { null }							// appli
+		val vController = AppController(VaultStore(vFile), { null })							// appli
 		vController.open(vController.create("Perso", "un mot de passe solide")!!)
 		vController.startNew()
 		val vNew   = vController.editing!!.copy(title = "Gmail", password = "premier")			// nouvelle entrée
@@ -76,7 +76,7 @@ class AppFlowTest
 		assertNull(vController.saveError)
 
 		val vDemoFile = fFolder.root.resolve("absent.kdbx")										// pas de coffre
-		val vDemo     = AppController(VaultStore(vDemoFile)) { null }							// appli en démonstration
+		val vDemo     = AppController(VaultStore(vDemoFile), { null })							// appli en démonstration
 		vDemo.openDemo()
 		vDemo.startNew()
 		vDemo.saveEntry(vDemo.editing!!.copy(title = "Essai"))
@@ -94,7 +94,7 @@ class AppFlowTest
 		val vFile    = fFolder.root.resolve("coffre.kdbx")										// coffre de l'appareil
 		val vKeePass = encodeVault(Vault(createVault("KeePassXC", "ancien")).save(EntryDraft(title = "Banque")).database)	// coffre existant
 		var vPicked  = PickedFile("notes.txt", "pas un coffre".toByteArray())					// fichier proposé
-		val vController = AppController(VaultStore(vFile)) { vPicked }						// appli
+		val vController = AppController(VaultStore(vFile), { vPicked })						// appli
 		vController.startImport()
 		assertEquals(AppScreen.Welcome, vController.screen)
 		assertEquals("« notes.txt » n'est pas un coffre KeePass.", vController.error)

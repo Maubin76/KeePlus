@@ -15,6 +15,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.nio.CharBuffer
 import java.util.UUID
 
 /*
@@ -38,6 +39,9 @@ fun interface VaultFiles
 	*/
 	suspend fun pickVault(): PickedFile?
 }
+
+const val kIdleMillis   = 5 * 60 * 1000L											// verrouillage après 5 min sans geste
+const val kHiddenMillis = 60 * 1000L												// verrouillage après 60 s en arrière-plan
 
 /*
 	Filtre de la liste des entrées.
@@ -101,15 +105,35 @@ sealed interface AppScreen
 
 /*
 	État de l'appli, commun à Android et au PC : écran affiché, opérations
-	sur le coffre de l'appareil, message d'erreur.
-	fStore : coffre de l'appareil
-	fFiles : accès aux fichiers de la plateforme
+	sur le coffre de l'appareil, message d'erreur, verrouillage automatique.
+	fStore     : coffre de l'appareil
+	fFiles     : accès aux fichiers de la plateforme
+	fBiometric : déverrouillage par empreinte ; null là où il n'existe pas (PC)
+	fNow       : horloge en millisecondes (verrouillage automatique)
 */
 class AppController(
-	private val fStore : VaultStore,
-	private val fFiles : VaultFiles
+	private val fStore     : VaultStore,
+	private val fFiles     : VaultFiles,
+	private val fBiometric : BiometricUnlock? = null,
+	private val fNow       : () -> Long       = System::currentTimeMillis
 )
 {
+	private var fLastActivity : Long       = fNow()										// dernier geste de l'utilisateur
+	private var fHiddenSince  : Long?      = null											// appli masquée depuis ; null si visible
+	private var fPending      : CharArray? = null											// mot de passe gardé le temps de proposer l'empreinte
+
+	/*
+		Vrai si l'empreinte est active : l'écran de déverrouillage la propose.
+	*/
+	val biometricReady: Boolean get() = fBiometric?.let { it.available && it.enabled } == true
+
+	/*
+		Vrai s'il faut proposer d'activer l'empreinte (juste après un
+		déverrouillage par mot de passe, une seule fois).
+	*/
+	var offerBiometric: Boolean by mutableStateOf(false)
+		private set
+
 	/*
 		Écran affiché.
 	*/
@@ -336,7 +360,118 @@ class AppController(
 		Ouvre le coffre de l'appareil ; null en cas d'échec (message dans error).
 		inPassword : mot de passe maître
 	*/
-	suspend fun unlock(inPassword: CharSequence): Vault? = run { fStore.unlock(inPassword) }
+	suspend fun unlock(inPassword: CharSequence): Vault?
+	{
+		val vVault = run { fStore.unlock(inPassword) } ?: return null					// coffre ouvert
+		val vOffer = fBiometric?.let { it.available && !it.enabled && !it.offered } == true	// proposer l'empreinte
+		if (vOffer)
+		{
+			fPending       = CharArray(inPassword.length) { inPassword[it] }
+			offerBiometric = true
+		}
+		return vVault
+	}
+
+	/*
+		Ouvre le coffre par l'empreinte ; null si l'utilisateur annule ou en
+		cas d'échec (message dans error). Si le mot de passe gardé ne
+		correspond plus (changé ailleurs) ou si la clé a été invalidée,
+		l'empreinte est désactivée et le mot de passe doit être ressaisi.
+	*/
+	suspend fun unlockWithBiometric(): Vault?
+	{
+		val vBiometric = fBiometric ?: return null												// empreinte
+		val vChars     = try
+		{
+			vBiometric.unlock() ?: return null
+		}
+		catch (vError: BiometricInvalidated)
+		{
+			vBiometric.disable()
+			error = vError.message
+			return null
+		}																					// mot de passe gardé
+		try
+		{
+			val vVault = run { fStore.unlock(CharBuffer.wrap(vChars)) }			// coffre ouvert
+			if (vVault == null && error == VaultException.WrongPassword().message)
+			{
+				vBiometric.disable()
+				error = "Le mot de passe a changé : saisissez-le pour réactiver l'empreinte."
+			}
+			return vVault
+		}
+		finally
+		{
+			vChars.fill(Char(0))
+		}
+	}
+
+	/*
+		Réponse à la proposition d'empreinte : l'active (avec le mot de passe
+		gardé depuis le déverrouillage) ou y renonce ; le mot de passe gardé
+		est effacé dans tous les cas.
+		inAccept : activer l'empreinte
+		Renvoie vrai si l'empreinte est active.
+	*/
+	suspend fun answerBiometricOffer(inAccept: Boolean): Boolean
+	{
+		val vBiometric = fBiometric ?: return false											// empreinte
+		val vPassword  = fPending																// mot de passe gardé
+		offerBiometric = false
+		vBiometric.markOffered()
+		try
+		{
+			if (!inAccept || vPassword == null) return false
+			return runCatching { vBiometric.enable(CharBuffer.wrap(vPassword)) }.getOrDefault(false)
+		}
+		finally
+		{
+			vPassword?.fill(Char(0))
+			fPending = null
+		}
+	}
+
+	/*
+		Note un geste de l'utilisateur (repousse le verrouillage automatique).
+	*/
+	fun touch()
+	{
+		fLastActivity = fNow()
+	}
+
+	/*
+		L'appli passe en arrière-plan (téléphone) ou la fenêtre est réduite
+		(PC), ou elle revient. Au retour, le coffre est verrouillé si l'absence
+		a dépassé le délai de grâce.
+		inHidden : appli masquée
+	*/
+	fun setHidden(inHidden: Boolean)
+	{
+		if (inHidden)
+		{
+			if (fHiddenSince == null) fHiddenSince = fNow()
+			return
+		}
+		val vSince = fHiddenSince																// début de l'absence
+		fHiddenSince = null
+		if (vSince != null && fNow() - vSince >= kHiddenMillis) lock()
+		touch()
+	}
+
+	/*
+		Verrouille si le coffre est ouvert et que l'utilisateur est inactif
+		depuis kIdleMillis, ou l'appli masquée depuis kHiddenMillis. Appelé
+		chaque seconde par l'interface.
+	*/
+	fun checkAutoLock()
+	{
+		if (screen !is AppScreen.Opened) return
+		val vNow = fNow()																	// maintenant
+		val vIdle   = vNow - fLastActivity >= kIdleMillis										// inactif trop longtemps
+		val vHidden = fHiddenSince?.let { vNow - it >= kHiddenMillis } == true					// masqué trop longtemps
+		if (vIdle || vHidden) lock()
+	}
 
 	/*
 		Reprend le coffre choisi comme coffre de l'appareil ; null en cas
@@ -355,6 +490,7 @@ class AppController(
 	*/
 	fun open(inVault: Vault)
 	{
+		touch()
 		error  = null
 		screen = AppScreen.Opened(inVault)
 	}
@@ -387,12 +523,15 @@ class AppController(
 	fun lock()
 	{
 		val vOpened = screen as? AppScreen.Opened ?: return								// coffre ouvert
-		error    = null
-		selected = null
-		editing  = null
-		filter   = ListFilter.All
+		error          = null
+		selected       = null
+		editing        = null
+		filter         = ListFilter.All
 		query.clearText()
-		screen   = if (vOpened.demo && !fStore.exists()) AppScreen.Welcome else AppScreen.Locked
+		fPending?.fill(Char(0))
+		fPending       = null
+		offerBiometric = false
+		screen         = if (vOpened.demo && !fStore.exists()) AppScreen.Welcome else AppScreen.Locked
 	}
 
 	/*

@@ -1,6 +1,8 @@
 package fr.maubin.keeplus.desktop
 
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
@@ -53,6 +55,9 @@ class DesktopFiles : VaultFiles
 fun main() = application {
 	val vState      = rememberWindowState(size = DpSize(1100.dp, 760.dp))					// taille de la fenêtre
 	val vController = remember { AppController(VaultStore(File(dataDir(), "coffre.kdbx")), DesktopFiles()) }	// état de l'appli
+	LaunchedEffect(vState) {
+		snapshotFlow { vState.isMinimized }.collect { vController.setHidden(it) }		// fenêtre réduite : délai de grâce
+	}
 	Window(onCloseRequest = ::exitApplication, state = vState, title = "KeePlus") {
 		KeePlusApp(vController)
 	}

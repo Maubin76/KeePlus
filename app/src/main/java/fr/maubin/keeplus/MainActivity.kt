@@ -1,15 +1,19 @@
 package fr.maubin.keeplus
 
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
 import android.view.WindowManager
-import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.fragment.app.FragmentActivity
 import fr.maubin.keeplus.ui.AppController
 import fr.maubin.keeplus.ui.KeePlusApp
 import fr.maubin.keeplus.ui.PickedFile
@@ -24,15 +28,33 @@ import java.io.File
 	Activité unique de KeePlus. Écran protégé (FLAG_SECURE) : ni capture, ni
 	aperçu dans les applications récentes. Le coffre est dans le stockage
 	privé de l'appli, inaccessible aux autres applis.
+	Verrouillage : écran éteint (aussitôt), appli en arrière-plan (au-delà du
+	délai de grâce, voir AppController).
 	fPending    : choix de fichier en attente du sélecteur
 	fPicker     : sélecteur de documents du système
 	fController : état de l'appli
+	fScreenOff  : écoute de l'extinction de l'écran
 */
-class MainActivity : ComponentActivity(), VaultFiles
+class MainActivity : FragmentActivity(), VaultFiles
 {
 	private var fPending: CompletableDeferred<Uri?>? = null
 	private val fPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { inUri -> fPending?.complete(inUri) }
 	private lateinit var fController: AppController
+	private val fScreenOff = object : BroadcastReceiver()
+	{
+		/*
+			Écran éteint : le coffre est verrouillé tout de suite.
+			inContext : contexte
+			inIntent  : événement
+		*/
+		override fun onReceive(
+			inContext : Context,
+			inIntent  : Intent
+		)
+		{
+			fController.lock()
+		}
+	}
 
 	/*
 		Création : écran protégé, barres système transparentes sur fond sombre,
@@ -44,11 +66,39 @@ class MainActivity : ComponentActivity(), VaultFiles
 		super.onCreate(inState)
 		window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
 		enableEdgeToEdge(SystemBarStyle.dark(android.graphics.Color.TRANSPARENT), SystemBarStyle.dark(android.graphics.Color.TRANSPARENT))
-		fController = AppController(VaultStore(File(filesDir, "coffre.kdbx")), this)
+		fController = AppController(VaultStore(File(filesDir, "coffre.kdbx")), this, AndroidBiometric(this))
+		registerReceiver(fScreenOff, IntentFilter(Intent.ACTION_SCREEN_OFF))
 		setContent {
 			BackHandler(enabled = fController.canGoBack) { fController.back() }
 			KeePlusApp(fController)
 		}
+	}
+
+	/*
+		Retour au premier plan : verrouille si l'absence a été trop longue.
+	*/
+	override fun onStart()
+	{
+		super.onStart()
+		fController.setHidden(false)
+	}
+
+	/*
+		Passage en arrière-plan : début du délai de grâce.
+	*/
+	override fun onStop()
+	{
+		super.onStop()
+		fController.setHidden(true)
+	}
+
+	/*
+		Fin de l'activité : plus d'écoute de l'écran.
+	*/
+	override fun onDestroy()
+	{
+		unregisterReceiver(fScreenOff)
+		super.onDestroy()
 	}
 
 	/*
