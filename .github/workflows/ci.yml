@@ -9,7 +9,13 @@
 #   et KEY_PASSWORD. Sans eux : clé jetable de la CI et avertissement (un tel
 #   APK ne peut pas mettre à jour l'appli installée).
 # - Appli PC : dossier portable zippé avec KeePlus.exe et sa JVM (Windows).
-# - Release GitHub « vX.Y » avec les deux fichiers.
+# - Release GitHub « vX.Y » avec les deux fichiers ; ses notes donnent la version du
+#   protocole de synchronisation (les applis préviennent quand il change : il faut alors
+#   mettre à jour le téléphone et le PC ensemble).
+#
+# Le dépôt est public : les applis lisent sa dernière release sans jeton pour proposer
+# les mises à jour. Les polices Satoshi n'y sont pas (leur licence l'interdit) : chaque
+# construction les télécharge depuis Fontshare (ci/polices.sh).
 #
 # Lançable aussi à la main depuis l'onglet Actions (workflow_dispatch).
 name: CI
@@ -37,6 +43,10 @@ jobs:
     steps:
       - name: Récupérer le code
         uses: actions/checkout@v7
+
+      - name: "Récupérer les polices Satoshi (non versionnées, voir leur licence)"
+        shell: bash
+        run: bash ci/polices.sh
 
       - name: Installer le JDK 21
         uses: actions/setup-java@v6
@@ -115,6 +125,10 @@ jobs:
         with:
           ref: ${{ needs.version.outputs.sha }}
 
+      - name: "Récupérer les polices Satoshi (non versionnées, voir leur licence)"
+        shell: bash
+        run: bash ci/polices.sh
+
       - name: Installer le JDK 21
         uses: actions/setup-java@v6
         with:
@@ -163,6 +177,10 @@ jobs:
         with:
           ref: ${{ needs.version.outputs.sha }}
 
+      - name: "Récupérer les polices Satoshi (non versionnées, voir leur licence)"
+        shell: bash
+        run: bash ci/polices.sh
+
       - name: Installer le JDK 21
         uses: actions/setup-java@v6
         with:
@@ -198,6 +216,11 @@ jobs:
       contents: write
 
     steps:
+      - name: Récupérer le code de la version
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.version.outputs.sha }}
+
       - name: Récupérer l'APK et le zip
         uses: actions/download-artifact@v7
         with:
@@ -210,8 +233,10 @@ jobs:
           VERSION: ${{ needs.version.outputs.version }}
           SHA: ${{ needs.version.outputs.sha }}
         run: |
+          vProtocol=$(sed -n 's/.*kLinkProtocol *= *\([0-9][0-9]*\).*/\1/p' core/src/main/kotlin/fr/maubin/keeplus/link/LinkProtocol.kt)
+          printf '%s\n\n%s\n' "Protocole de synchronisation : $vProtocol" "Version $VERSION : APK Android et appli PC portable (dézipper, lancer KeePlus.exe)." > notes.md
           gh release create "v$VERSION" fichiers/* \
             --repo "${{ github.repository }}" \
             --target "$SHA" \
             --title "KeePlus $VERSION" \
-            --notes "Version $VERSION : APK Android et appli PC portable (dézipper, lancer KeePlus.exe)."
+            --notes-file notes.md

@@ -15,3 +15,5 @@ build/
 local.properties
 .kotlin/
 *.tmp
+# Polices Satoshi : licence ITF, publication interdite (téléchargées par ci/polices.sh).
+ui/src/commonMain/composeResources/font/satoshi_*.ttf
