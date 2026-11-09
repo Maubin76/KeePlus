@@ -71,5 +71,10 @@ class PreviewRenderTest
 		render("coffre") { VaultScreen(vController, vOpened.vault, true) }
 		vController.selected = vOpened.vault.items().first { it.title == "Société Générale" }.id
 		render("fiche") { VaultScreen(vController, vOpened.vault, true) }
+		vController.startEdit(vController.selected!!)
+		render("edition") { VaultScreen(vController, vOpened.vault, true) }
+		vController.cancelEdit()
+		vController.startNew()
+		render("nouvelle") { VaultScreen(vController, vOpened.vault, true) }
 	}
 }

@@ -27,6 +27,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import fr.maubin.keeplus.ui.components.GhostButton
 import fr.maubin.keeplus.ui.components.IconAction
 import fr.maubin.keeplus.ui.components.Monogram
 import fr.maubin.keeplus.ui.components.OneLine
@@ -53,13 +55,15 @@ private const val kMask = "••••••••••••"												// s
 	inId      : entrée affichée
 	inCopy    : copies
 	inOnClose : fermer la fiche (flèche Retour, téléphone) ; null pour aucune
+	inActions : actions sur l'entrée (modifier, corbeille, restaurer)
 */
 @Composable
 fun EntryDetail(
 	inVault   : Vault,
 	inId      : UUID,
 	inCopy    : CopyActions,
-	inOnClose : (() -> Unit)?
+	inOnClose : (() -> Unit)?,
+	inActions : EntryActions
 )
 {
 	val vDraft   = inVault.draft(inId) ?: return												// contenu de l'entrée
@@ -74,9 +78,31 @@ fun EntryDetail(
 			.verticalScroll(rememberScrollState())
 			.padding(horizontal = 20.dp, vertical = 12.dp)
 	) {
-		if (inOnClose != null)
+		val vInTrash = vDraft.groupId?.let { inVault.isInTrash(it) } == true				// entrée à la corbeille
+		var vConfirm by remember(inId) { mutableStateOf(false) }							// confirmation de suppression
+		Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+			if (inOnClose != null) IconAction(LineIcons.Back, "Retour à la liste", inOnClose, inTint = KeeColors.text)
+			Spacer(Modifier.weight(1f))
+			if (vInTrash)
+			{
+				IconAction(LineIcons.Restore, "Restaurer", { inActions.restore(inId) }, inTint = KeeColors.text)
+				IconAction(LineIcons.Trash, "Supprimer définitivement", { vConfirm = true }, inTint = KeeColors.danger)
+			}
+			else
+			{
+				IconAction(LineIcons.Edit, "Modifier", { inActions.edit(inId) }, inTint = KeeColors.text)
+				IconAction(LineIcons.Trash, "Mettre à la corbeille", { inActions.trash(inId) })
+			}
+		}
+		if (vConfirm)
 		{
-			IconAction(LineIcons.Back, "Retour à la liste", inOnClose, Modifier.padding(bottom = 8.dp), KeeColors.text)
+			ConfirmDialog(
+				inTitle     = "Supprimer définitivement ?",
+				inText      = "« ${vDraft.title.ifBlank { "Sans titre" }} » sera effacée du coffre, sur cet appareil et sur les autres à la prochaine synchronisation.",
+				inConfirm   = "Supprimer",
+				inOnDismiss = { vConfirm = false },
+				inOnConfirm = { vConfirm = false; inActions.trash(inId) }
+			)
 		}
 		Column(Modifier.widthIn(max = 640.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
 			Row(verticalAlignment = Alignment.CenterVertically) {
@@ -123,6 +149,50 @@ fun EntryDetail(
 			).joinToString(" · ")																// pied de fiche
 			if (vFooter.isNotEmpty()) BasicText(vFooter, Modifier.padding(horizontal = 4.dp), style = vType.bodySmall.copy(color = KeeColors.textFaint))
 			Spacer(Modifier.height(80.dp))
+		}
+	}
+}
+
+/*
+	Actions possibles depuis la fiche.
+	edit    : modifier l'entrée
+	trash   : mettre à la corbeille (ou supprimer pour de bon depuis la corbeille)
+	restore : sortir de la corbeille
+*/
+class EntryActions(
+	val edit    : (UUID) -> Unit,
+	val trash   : (UUID) -> Unit,
+	val restore : (UUID) -> Unit
+)
+
+/*
+	Boîte de confirmation d'une action irréversible.
+	inTitle     : question
+	inText      : conséquence
+	inConfirm   : libellé du bouton de confirmation
+	inOnDismiss : renoncer
+	inOnConfirm : confirmer
+*/
+@Composable
+fun ConfirmDialog(
+	inTitle     : String,
+	inText      : String,
+	inConfirm   : String,
+	inOnDismiss : () -> Unit,
+	inOnConfirm : () -> Unit
+)
+{
+	Dialog(onDismissRequest = inOnDismiss) {
+		Column(
+			Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(KeeColors.surfaceHigh).padding(20.dp),
+			verticalArrangement = Arrangement.spacedBy(14.dp)
+		) {
+			BasicText(inTitle, style = keeType().headline)
+			BasicText(inText, style = keeType().bodySmall)
+			Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+				GhostButton("Annuler", inOnDismiss, Modifier.weight(1f))
+				GhostButton(inConfirm, inOnConfirm, Modifier.weight(1f))
+			}
 		}
 	}
 }

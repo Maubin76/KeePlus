@@ -139,6 +139,34 @@ object LineIcons
 		"M13.5 11 V16.5"
 	)
 
+	// Nouveau tirage : flèches en cercle.
+	val Refresh: ImageVector = lineIcon(
+		"Nouveau tirage",
+		"M19.5 12 A7.5 7.5 0 1 1 17 6.4",
+		"M17.5 3 V6.8 H13.7"
+	)
+
+	// Ajouter : plus.
+	val Plus: ImageVector = lineIcon(
+		"Ajouter",
+		"M12 5 V19",
+		"M5 12 H19"
+	)
+
+	// Modifier : crayon.
+	val Edit: ImageVector = lineIcon(
+		"Modifier",
+		"M15.5 5 L19 8.5 L9 18.5 L4.5 19.5 L5.5 15 Z",
+		"M13.5 7 L17 10.5"
+	)
+
+	// Restaurer : flèche de retour en arrière.
+	val Restore: ImageVector = lineIcon(
+		"Restaurer",
+		"M4.5 12 A7.5 7.5 0 1 0 7 6.4",
+		"M6.5 3 V6.8 H10.3"
+	)
+
 	// Attention : cercle et point d'exclamation.
 	val Alert: ImageVector = lineIcon(
 		"Attention",

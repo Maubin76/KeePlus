@@ -36,8 +36,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -62,9 +64,11 @@ import fr.maubin.keeplus.ui.platform.rememberSecretClipboard
 import fr.maubin.keeplus.ui.theme.KeeColors
 import fr.maubin.keeplus.ui.theme.KeeLogo
 import fr.maubin.keeplus.ui.theme.keeType
+import fr.maubin.keeplus.vault.EntryDraft
 import fr.maubin.keeplus.vault.Vault
 import fr.maubin.keeplus.vault.VaultItem
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.util.UUID
 
 private val kWideMin    = 840.dp															// largeur à partir de laquelle on passe en 3 colonnes
@@ -101,8 +105,9 @@ class CopyActions(
 }
 
 /*
-	Coffre ouvert : en 3 colonnes (groupes, liste, fiche) sur un écran large,
-	sinon liste puis fiche en plein écran. Bandeau de confirmation des copies.
+	Coffre ouvert : en 3 colonnes (groupes, liste, fiche ou édition) sur un
+	écran large, sinon liste, puis fiche ou édition en plein écran. Bandeau
+	de confirmation des copies et des actions ; état de l'enregistrement.
 	inController : état de l'appli
 	inVault      : coffre ouvert
 	inDemo       : coffre de démonstration
@@ -114,12 +119,23 @@ fun VaultScreen(
 	inDemo       : Boolean
 )
 {
-	var vNotice by remember { mutableStateOf<String?>(null) }								// bandeau affiché
-	var vStamp  by remember { mutableStateOf(0) }											// numéro du bandeau, pour relancer le délai
-	val vCopy   = CopyActions(rememberSecretClipboard()) { vNotice = it; vStamp++ }			// copies
+	val vScope   = rememberCoroutineScope()													// actions sur le coffre
+	var vNotice  by remember { mutableStateOf<String?>(null) }								// bandeau affiché
+	var vStamp   by remember { mutableStateOf(0) }											// numéro du bandeau, pour relancer le délai
+	val vNotify  = { vText: String -> vNotice = vText; vStamp += 1 }							// affiche un bandeau
+	val vCopy    = CopyActions(rememberSecretClipboard(), vNotify)							// copies
+	val vActions = EntryActions(
+		edit    = inController::startEdit,
+		trash   = { vId ->
+			val vForGood = inVault.draft(vId)?.groupId?.let { inVault.isInTrash(it) } == true	// déjà à la corbeille
+			vScope.launch { inController.trashEntry(vId) }
+			vNotify(if (vForGood) "Entrée supprimée" else "Entrée mise à la corbeille")
+		},
+		restore = { vId -> vScope.launch { inController.restoreEntry(vId) }; vNotify("Entrée restaurée") }
+	)																						// actions de la fiche
 	LaunchedEffect(vStamp) { if (vNotice != null) { delay(2600); vNotice = null } }
-	val vQuery  = inController.query.text.toString()										// texte cherché
-	val vItems  = remember(inVault, vQuery, inController.filter) {
+	val vQuery   = inController.query.text.toString()										// texte cherché
+	val vItems   = remember(inVault, vQuery, inController.filter) {
 		when (val vFilter = inController.filter)
 		{
 			ListFilter.All      -> inVault.search(vQuery)
@@ -128,15 +144,38 @@ fun VaultScreen(
 		}
 	}																						// entrées affichées
 	BoxWithConstraints(Modifier.fillMaxSize().background(KeeColors.ground)) {
-		if (maxWidth >= kWideMin) WideVault(inController, inVault, inDemo, vItems, vCopy)
-		else CompactVault(inController, inVault, inDemo, vItems, vCopy)
-		Notice(vNotice, Modifier.align(Alignment.BottomCenter).safeDrawingPadding().padding(bottom = 24.dp))
+		if (maxWidth >= kWideMin) WideVault(inController, inVault, inDemo, vItems, vCopy, vActions)
+		else CompactVault(inController, inVault, inDemo, vItems, vCopy, vActions)
+		Notice(inController.saveError ?: vNotice, Modifier.align(Alignment.BottomCenter).safeDrawingPadding().padding(bottom = 24.dp))
 	}
 }
 
 /*
-	Téléphone : liste (en-tête, recherche, pastilles de groupes), et fiche en
-	plein écran par-dessus quand une entrée est choisie.
+	Volet affiché sur le téléphone.
+*/
+private sealed interface Pane
+{
+	/*
+		Liste des entrées.
+	*/
+	data object List : Pane
+
+	/*
+		Fiche d'une entrée.
+		id : entrée
+	*/
+	data class Detail(val id: UUID) : Pane
+
+	/*
+		Édition d'une entrée.
+		draft : contenu de départ
+	*/
+	data class Edit(val draft: EntryDraft) : Pane
+}
+
+/*
+	Téléphone : liste (en-tête, recherche, pastilles de groupes, bouton
+	« + »), puis fiche ou édition en plein écran par-dessus.
 */
 @Composable
 private fun CompactVault(
@@ -144,39 +183,59 @@ private fun CompactVault(
 	inVault      : Vault,
 	inDemo       : Boolean,
 	inItems      : List<VaultItem>,
-	inCopy       : CopyActions
+	inCopy       : CopyActions,
+	inActions    : EntryActions
 )
 {
+	val vEditing  = inController.editing														// entrée en édition
+	val vSelected = inController.selected?.takeIf { inVault.draft(it) != null }			// entrée affichée
+	val vPane     = when
+	{
+		vEditing != null  -> Pane.Edit(vEditing)
+		vSelected != null -> Pane.Detail(vSelected)
+		else              -> Pane.List
+	}																						// volet affiché
 	AnimatedContent(
-		inController.selected?.takeIf { inVault.draft(it) != null },
+		vPane,
+		contentKey     = { it::class },
 		transitionSpec = {
-			if (targetState != null) (slideInHorizontally { it / 4 } + fadeIn()) togetherWith fadeOut()
+			if (targetState != Pane.List) (slideInHorizontally { it / 4 } + fadeIn()) togetherWith fadeOut()
 			else fadeIn() togetherWith (slideOutHorizontally { it / 4 } + fadeOut())
 		},
-		label = "fiche"
-	) { vSelected ->
-		if (vSelected != null)
+		label = "volet"
+	) { vShown ->
+		when (vShown)
 		{
-			EntryDetail(inVault, vSelected, inCopy, inOnClose = { inController.selected = null })
-			return@AnimatedContent
-		}
-		Column(Modifier.fillMaxSize().background(mistTop()).safeDrawingPadding()) {
-			Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-				KeeLogo(inSize = 26.dp)
-				Spacer(Modifier.width(10.dp))
-				OneLine(inVault.name, keeType().title, Modifier.weight(1f))
-				IconAction(LineIcons.Lock, "Verrouiller", inController::lock, inTint = KeeColors.text)
+			is Pane.Edit   -> EntryEditor(inController, inVault, vShown.draft)
+			is Pane.Detail -> EntryDetail(inVault, vShown.id, inCopy, { inController.selected = null }, inActions)
+			Pane.List      -> Box(Modifier.fillMaxSize()) {
+				Column(Modifier.fillMaxSize().background(mistTop()).safeDrawingPadding()) {
+					Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+						KeeLogo(inSize = 26.dp)
+						Spacer(Modifier.width(10.dp))
+						Column(Modifier.weight(1f)) {
+							OneLine(inVault.name, keeType().title)
+							SaveStatus(inController)
+						}
+						IconAction(LineIcons.Lock, "Verrouiller", inController::lock, inTint = KeeColors.text)
+					}
+					if (inDemo) DemoBadge(Modifier.padding(start = 20.dp, top = 4.dp))
+					SearchField(inController.query, Modifier.padding(horizontal = 16.dp, vertical = 12.dp))
+					GroupPills(inController, inVault)
+					EntryList(inVault, inItems, null, inController, inCopy, emptyText(inController, inVault), PaddingValues(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 112.dp))
+				}
+				if (inController.filter != ListFilter.Trash)
+				{
+					AddButton(inController::startNew, Modifier.align(Alignment.BottomEnd).safeDrawingPadding().padding(20.dp))
+				}
 			}
-			if (inDemo) DemoBadge(Modifier.padding(start = 20.dp, top = 4.dp))
-			SearchField(inController.query, Modifier.padding(horizontal = 16.dp, vertical = 12.dp))
-			GroupPills(inController, inVault)
-			EntryList(inVault, inItems, null, inController, inCopy, emptyText(inController, inVault), PaddingValues(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 96.dp))
 		}
 	}
 }
 
 /*
-	PC : groupes à gauche, liste au centre, fiche à droite.
+	PC : groupes à gauche, liste au centre (bouton « + » à côté de la
+	recherche), fiche ou édition à droite.
 */
 @Composable
 private fun WideVault(
@@ -184,7 +243,8 @@ private fun WideVault(
 	inVault      : Vault,
 	inDemo       : Boolean,
 	inItems      : List<VaultItem>,
-	inCopy       : CopyActions
+	inCopy       : CopyActions,
+	inActions    : EntryActions
 )
 {
 	Row(Modifier.fillMaxSize()) {
@@ -195,20 +255,68 @@ private fun WideVault(
 				.fillMaxHeight()
 				.background(KeeColors.ground)
 		) {
-			SearchField(inController.query, Modifier.padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 8.dp))
+			Row(Modifier.padding(start = 16.dp, end = 12.dp, top = 20.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+				SearchField(inController.query, Modifier.weight(1f))
+				Spacer(Modifier.width(8.dp))
+				AddButton(inController::startNew, inCompact = true)
+			}
 			EntryList(inVault, inItems, inController.selected, inController, inCopy, emptyText(inController, inVault), PaddingValues(8.dp))
 		}
 		Box(Modifier.width(1.dp).fillMaxHeight().background(KeeColors.rule))
 		Box(Modifier.weight(1f).fillMaxHeight().background(mistTop())) {
+			val vEditing  = inController.editing														// entrée en édition
 			val vSelected = inController.selected?.takeIf { inVault.draft(it) != null }		// entrée affichée
-			if (vSelected != null) EntryDetail(inVault, vSelected, inCopy, inOnClose = null)
-			else BasicText(
-				"Choisissez une entrée.",
-				Modifier.align(Alignment.Center),
-				style = keeType().bodySmall
-			)
+			when
+			{
+				vEditing != null  -> key(vEditing.id) { EntryEditor(inController, inVault, vEditing) }
+				vSelected != null -> EntryDetail(inVault, vSelected, inCopy, null, inActions)
+				else              -> BasicText("Choisissez une entrée.", Modifier.align(Alignment.Center), style = keeType().bodySmall)
+			}
 		}
 	}
+}
+
+/*
+	Bouton d'ajout d'une entrée : pilule argentée « + Nouvelle entrée »
+	(téléphone, flottant), ou rond argenté (PC, à côté de la recherche).
+	inOnClick  : action
+	inModifier : modificateur
+	inCompact  : rond, sans texte
+*/
+@Composable
+private fun AddButton(
+	inOnClick  : () -> Unit,
+	inModifier : Modifier = Modifier,
+	inCompact  : Boolean  = false
+)
+{
+	Row(
+		inModifier
+			.height(if (inCompact) 48.dp else 56.dp)
+			.clip(CircleShape)
+			.background(Brush.verticalGradient(listOf(KeeColors.silverLight, KeeColors.silverDark)))
+			.clickable(role = Role.Button, onClick = inOnClick)
+			.padding(horizontal = if (inCompact) 12.dp else 20.dp),
+		verticalAlignment = Alignment.CenterVertically
+	) {
+		Icon(LineIcons.Plus, "Nouvelle entrée", Modifier.size(24.dp), tint = KeeColors.silverInk)
+		if (!inCompact)
+		{
+			Spacer(Modifier.width(8.dp))
+			BasicText("Nouvelle entrée", style = keeType().label.copy(color = KeeColors.silverInk))
+		}
+	}
+}
+
+/*
+	État de l'enregistrement, sous le nom du coffre : « Enregistrement… »
+	pendant l'écriture ; rien sinon (un échec s'affiche dans le bandeau).
+	inController : état de l'appli
+*/
+@Composable
+private fun SaveStatus(inController: AppController)
+{
+	if (inController.saving) BasicText("Enregistrement…", style = keeType().bodySmall.copy(color = KeeColors.textFaint))
 }
 
 /*
@@ -233,7 +341,10 @@ private fun GroupColumn(
 		Row(Modifier.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
 			KeeLogo(inSize = 26.dp)
 			Spacer(Modifier.width(10.dp))
-			OneLine(inVault.name, vType.title, Modifier.weight(1f))
+			Column(Modifier.weight(1f)) {
+				OneLine(inVault.name, vType.title)
+				SaveStatus(inController)
+			}
 		}
 		if (inDemo) DemoBadge(Modifier.padding(start = 8.dp, top = 10.dp))
 		Spacer(Modifier.height(20.dp))

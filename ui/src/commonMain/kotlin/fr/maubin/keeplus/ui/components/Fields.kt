@@ -97,18 +97,20 @@ fun SecretField(
 }
 
 /*
-	Champ de texte simple, sur une ligne.
+	Champ de texte simple, sur une ligne ou plusieurs.
 	inState       : texte saisi
 	inPlaceholder : indication affichée quand le champ est vide
 	inModifier    : modificateur
 	inImeAction   : action du clavier
+	inMultiLine   : plusieurs lignes (notes) ; trois lignes au moins
 */
 @Composable
 fun KeeTextField(
 	inState       : TextFieldState,
 	inPlaceholder : String,
 	inModifier    : Modifier  = Modifier,
-	inImeAction   : ImeAction = ImeAction.Next
+	inImeAction   : ImeAction = ImeAction.Next,
+	inMultiLine   : Boolean   = false
 )
 {
 	val vSource  = remember { MutableInteractionSource() }									// focus
@@ -119,8 +121,8 @@ fun KeeTextField(
 		textStyle         = keeType().body,
 		cursorBrush       = SolidColor(KeeColors.text),
 		interactionSource = vSource,
-		lineLimits        = TextFieldLineLimits.SingleLine,
-		keyboardOptions   = KeyboardOptions(imeAction = inImeAction),
+		lineLimits        = if (inMultiLine) TextFieldLineLimits.MultiLine(minHeightInLines = 3) else TextFieldLineLimits.SingleLine,
+		keyboardOptions   = KeyboardOptions(imeAction = if (inMultiLine) ImeAction.Default else inImeAction),
 		decorator         = fieldDecorator(inState, inPlaceholder, vFocused, false, null)
 	)
 }

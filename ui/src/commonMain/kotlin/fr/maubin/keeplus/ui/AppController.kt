@@ -5,12 +5,15 @@ import androidx.compose.foundation.text.input.clearText
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import fr.maubin.keeplus.vault.EntryDraft
 import fr.maubin.keeplus.vault.Vault
 import fr.maubin.keeplus.vault.VaultException
 import fr.maubin.keeplus.vault.VaultStore
 import fr.maubin.keeplus.vault.demoVault
 import fr.maubin.keeplus.vault.isKeePassFile
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.util.UUID
 
@@ -141,21 +144,155 @@ class AppController(
 	var selected: UUID? by mutableStateOf(null)
 
 	/*
-		Vrai si la touche Retour a un sens : fermer la fiche, quitter la
-		création ou la reprise d'un coffre.
+		Entrée en cours d'édition (copie de travail) ; null hors édition.
 	*/
-	val canGoBack: Boolean get() = screen == AppScreen.Create || screen is AppScreen.Import || (screen is AppScreen.Opened && selected != null)
+	var editing: EntryDraft? by mutableStateOf(null)
+		private set
 
 	/*
-		Retour : ferme la fiche ouverte, ou revient à l'accueil depuis la
-		création ou la reprise d'un coffre.
+		Écriture du coffre en cours, en arrière-plan.
+	*/
+	var saving: Boolean by mutableStateOf(false)
+		private set
+
+	/*
+		Message d'échec de la dernière écriture ; null si elle a réussi.
+	*/
+	var saveError: String? by mutableStateOf(null)
+		private set
+
+	private val fSaveLock = Mutex()														// écritures l'une après l'autre
+
+	/*
+		Vrai si la touche Retour a un sens : quitter l'édition, fermer la fiche,
+		quitter la création ou la reprise d'un coffre.
+	*/
+	val canGoBack: Boolean
+		get() = screen == AppScreen.Create || screen is AppScreen.Import ||
+			(screen is AppScreen.Opened && (selected != null || editing != null))
+
+	/*
+		Retour : quitte l'édition sans enregistrer, ferme la fiche ouverte, ou
+		revient à l'accueil depuis la création ou la reprise d'un coffre.
 	*/
 	fun back()
 	{
 		if (!canGoBack) return
 		error = null
-		if (screen is AppScreen.Opened) selected = null else screen = AppScreen.Welcome
+		when
+		{
+			editing != null            -> editing = null
+			screen is AppScreen.Opened -> selected = null
+			else                       -> screen = AppScreen.Welcome
+		}
 	}
+
+	/*
+		Commence une nouvelle entrée, dans le groupe filtré s'il y en a un.
+	*/
+	fun startNew()
+	{
+		val vGroup = (filter as? ListFilter.Group)?.id											// groupe filtré
+		editing = EntryDraft(id = UUID.randomUUID(), groupId = vGroup)
+	}
+
+	/*
+		Commence la modification d'une entrée.
+		inId : identifiant de l'entrée
+	*/
+	fun startEdit(inId: UUID)
+	{
+		editing = openedVault()?.draft(inId)
+	}
+
+	/*
+		Quitte l'édition sans enregistrer.
+	*/
+	fun cancelEdit()
+	{
+		editing = null
+	}
+
+	/*
+		Enregistre l'entrée éditée : le coffre affiché change tout de suite,
+		puis il est écrit en arrière-plan (sauf démonstration).
+		inDraft : contenu de l'entrée
+	*/
+	suspend fun saveEntry(inDraft: EntryDraft)
+	{
+		val vVault = openedVault() ?: return													// coffre ouvert
+		editing  = null
+		selected = inDraft.id
+		apply(vVault.save(inDraft))
+	}
+
+	/*
+		Met une entrée à la corbeille ; une entrée déjà à la corbeille est
+		supprimée pour de bon.
+		inId : identifiant de l'entrée
+	*/
+	suspend fun trashEntry(inId: UUID)
+	{
+		val vVault = openedVault() ?: return													// coffre ouvert
+		selected = null
+		apply(vVault.trash(inId))
+	}
+
+	/*
+		Sort une entrée de la corbeille.
+		inId : identifiant de l'entrée
+	*/
+	suspend fun restoreEntry(inId: UUID)
+	{
+		val vVault = openedVault() ?: return													// coffre ouvert
+		apply(vVault.restore(inId))
+	}
+
+	/*
+		Ajoute un groupe à la racine et renvoie son identifiant.
+		inName : nom du groupe
+	*/
+	suspend fun addGroup(inName: String): UUID?
+	{
+		val vVault = openedVault() ?: return null												// coffre ouvert
+		val vId    = UUID.randomUUID()														// nouveau groupe
+		apply(vVault.addGroup(inName.trim(), inId = vId))
+		return vId
+	}
+
+	/*
+		Affiche un coffre modifié, puis l'écrit (sauf démonstration). Un échec
+		d'écriture est signalé dans saveError ; le coffre affiché reste à jour
+		et la prochaine écriture réessaiera.
+		inVault : coffre modifié
+	*/
+	private suspend fun apply(inVault: Vault)
+	{
+		val vOpened = screen as? AppScreen.Opened ?: return									// coffre ouvert
+		screen = AppScreen.Opened(inVault, vOpened.demo)
+		if (vOpened.demo) return
+		fSaveLock.withLock {
+			saving = true
+			try
+			{
+				fStore.save(inVault)
+				saveError = null
+			}
+			catch (vError: Exception)
+			{
+				saveError = "Échec de l'enregistrement : ${vError.message ?: vError::class.simpleName}"
+			}
+			finally
+			{
+				saving = false
+			}
+		}
+	}
+
+	/*
+		Coffre ouvert ; null si le coffre est verrouillé.
+	*/
+	private fun openedVault(): Vault? = (screen as? AppScreen.Opened)?.vault
 
 	/*
 		Va à la création du coffre.
@@ -252,6 +389,7 @@ class AppController(
 		val vOpened = screen as? AppScreen.Opened ?: return								// coffre ouvert
 		error    = null
 		selected = null
+		editing  = null
 		filter   = ListFilter.All
 		query.clearText()
 		screen   = if (vOpened.demo && !fStore.exists()) AppScreen.Welcome else AppScreen.Locked
