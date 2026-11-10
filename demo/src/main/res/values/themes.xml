@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Thème clair standard d'Android : la démo doit ressembler à une appli ordinaire, pas à KeePlus.
+     Sans barre d'action (affichage bord à bord imposé) ; chaque écran a son titre et réserve la
+     place des barres système (fitsSystemWindows). Icônes sombres sur les barres claires. -->
+<resources>
+	<style name="Theme.DemoConnexion" parent="android:Theme.Material.Light.NoActionBar">
+		<item name="android:windowLightStatusBar">true</item>
+		<item name="android:windowLightNavigationBar">true</item>
+	</style>
+</resources>

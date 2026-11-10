@@ -86,3 +86,11 @@ dependencies {
 
 	testImplementation(libs.junit)
 }
+
+// Chaque build debug de KeePlus (Android Studio ou :app:installDebug) installe aussi
+// l'appli Démo Connexion sur les appareils branchés, pour essayer l'auto-remplissage.
+// Sans appareil, rien n'est installé et le build continue ; la CI ne construit que
+// la version release, sans la démo.
+tasks.matching { it.name == "assembleDebug" || it.name == "installDebug" }.configureEach {
+	finalizedBy(":demo:installOnDevices")
+}
