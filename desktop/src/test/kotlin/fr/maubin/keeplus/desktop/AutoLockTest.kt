@@ -151,6 +151,32 @@ class AutoLockTest
 	}
 
 	/*
+		Auto-remplissage : le coffre ouvert est prêté tant que les délais de
+		verrouillage ne sont pas dépassés, même avant le verrouillage
+		effectif ; jamais une fois verrouillé. Une modification venue de
+		l'auto-remplissage est affichée et enregistrée.
+	*/
+	@Test
+	fun activeVaultForAutofill() = runBlocking {
+		val vController = opened()																// coffre ouvert
+		assertNotNull(vController.activeVault())
+		vController.edit { it.addGroup("Applis") }
+		assertEquals(listOf("Applis"), vController.activeVault()!!.groups().map { it.name })
+		vController.lock()
+		assertNull(vController.unlock("faux"))
+		vController.open(vController.unlock("un mot de passe solide")!!)
+		assertEquals(listOf("Applis"), vController.activeVault()!!.groups().map { it.name })
+		vController.setHidden(true)
+		fTime += kHiddenMillis - 5000
+		assertNotNull(vController.activeVault())
+		fTime += 5000
+		assertNull(vController.activeVault())
+		assertTrue(vController.screen is AppScreen.Opened)
+		vController.setHidden(false)
+		assertNull(vController.activeVault())
+	}
+
+	/*
 		Délais réglés : 1 min d'inactivité, verrouillage aussitôt en
 		arrière-plan ; réglages enregistrés.
 	*/

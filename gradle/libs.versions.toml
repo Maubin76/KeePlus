@@ -17,6 +17,7 @@ jna                   = "5.19.1"
 zxing                 = "3.5.3"
 camerax               = "1.4.2"
 work                  = "2.12.0"
+autofill              = "1.3.0"
 junit                 = "4.13.2"
 
 [libraries]
@@ -43,6 +44,7 @@ androidx-camera-camera2                = { group = "androidx.camera", name = "ca
 androidx-camera-lifecycle              = { group = "androidx.camera", name = "camera-lifecycle", version.ref = "camerax" }
 androidx-camera-view                   = { group = "androidx.camera", name = "camera-view", version.ref = "camerax" }
 androidx-work-runtime                  = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "work" }
+androidx-autofill                      = { group = "androidx.autofill", name = "autofill", version.ref = "autofill" }
 junit                                  = { group = "junit", name = "junit", version.ref = "junit" }
 
 [plugins]

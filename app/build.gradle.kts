@@ -80,6 +80,7 @@ dependencies {
 	implementation(libs.androidx.camera.camera2)											// appareil photo (scan du QR code)
 	implementation(libs.androidx.camera.lifecycle)
 	implementation(libs.androidx.camera.view)
+	implementation(libs.androidx.autofill)													// suggestions d'auto-remplissage dans le clavier
 	implementation(libs.androidx.work.runtime)												// synchronisation en tâche de fond
 	debugImplementation(libs.androidx.compose.ui.tooling)
 

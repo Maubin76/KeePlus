@@ -523,6 +523,33 @@ class AppController(
 	}
 
 	/*
+		Coffre ouvert, pour l'auto-remplissage ; null s'il est verrouillé, si
+		c'est la démonstration, ou si un délai de verrouillage est dépassé
+		(le verrouillage lui-même n'a lieu qu'au retour dans l'appli).
+	*/
+	fun activeVault(): Vault?
+	{
+		val vOpened = screen as? AppScreen.Opened ?: return null								// coffre ouvert
+		if (vOpened.demo) return null
+		val vNow    = fNow()																	// maintenant
+		if (vNow - fLastActivity >= settings.idleMinutes * 60_000L) return null
+		if (fHiddenSince?.let { vNow - it >= settings.hiddenSeconds * 1000L } == true) return null
+		return vOpened.vault
+	}
+
+	/*
+		Modifie le coffre ouvert (auto-remplissage : lien retenu avec une
+		appli) et l'enregistre ; rien s'il est verrouillé.
+		inChange : modification
+	*/
+	suspend fun edit(inChange: (Vault) -> Vault)
+	{
+		val vVault = openedVault()?.takeIf { (screen as AppScreen.Opened).demo.not() } ?: return	// coffre ouvert
+		val vNew   = inChange(vVault)																// coffre modifié
+		if (vNew !== vVault) apply(vNew)
+	}
+
+	/*
 		Coffre ouvert ; null si le coffre est verrouillé.
 	*/
 	private fun openedVault(): Vault? = (screen as? AppScreen.Opened)?.vault
