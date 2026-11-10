@@ -61,6 +61,7 @@ import fr.maubin.keeplus.ui.components.SearchField
 import fr.maubin.keeplus.ui.components.KeeTextField
 import fr.maubin.keeplus.ui.components.SecretField
 import fr.maubin.keeplus.ui.components.SilverButton
+import fr.maubin.keeplus.ui.components.Stepper
 import fr.maubin.keeplus.ui.components.TextLink
 import fr.maubin.keeplus.ui.components.secretAnnotated
 import fr.maubin.keeplus.ui.icons.LineIcons
@@ -74,6 +75,7 @@ import kotlinx.coroutines.launch
 import java.util.UUID
 
 private val kCardShape  = RoundedCornerShape(36.dp)											// carte aux coins très arrondis
+private val kLengths     = 8..64																// longueurs proposées (comme le générateur de l'appli)
 private const val kScrim = 0.18f																	// voile sur l'appli, carte affichée
 private const val kOutMs = 220																		// durée de la sortie (ms)
 
@@ -320,7 +322,8 @@ private fun ProposalPart(
 	val vFields    = inRequest.identities.map { vField ->
 		vField to remember(vField.id) { TextFieldState(inVault.suggestedUserName(vField.email)) }
 	}																							// champs d'identité et leurs valeurs
-	var vPassword  by remember { mutableStateOf(generatePassword(PasswordOptions())) }		// mot de passe proposé
+	var vOptions   by remember { mutableStateOf(PasswordOptions()) }							// réglages du générateur
+	var vPassword  by remember { mutableStateOf(generatePassword(vOptions)) }				// mot de passe proposé
 	for ((vField, vState) in vFields)
 	{
 		Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -328,9 +331,13 @@ private fun ProposalPart(
 			KeeTextField(vState, if (vField.email) "vous@exemple.fr" else "Identifiant", inImeAction = ImeAction.Done)
 		}
 	}
-	GeneratedPassword(if (inRequest.newPasswords.size > 1) "Mot de passe (et sa confirmation)" else "Mot de passe", vPassword) {
-		vPassword = generatePassword(PasswordOptions())
-	}
+	GeneratedPassword(
+		inLabel    = if (inRequest.newPasswords.size > 1) "Mot de passe (et sa confirmation)" else "Mot de passe",
+		inValue    = vPassword,
+		inLength   = vOptions.length,
+		inOnLength = { vOptions = vOptions.copy(length = it); vPassword = generatePassword(vOptions) },
+		inOnDraw   = { vPassword = generatePassword(vOptions) }
+	)
 	SilverButton("Remplir et enregistrer", { inOnFill(inVault, vFields.map { it.second.text.toString().trim() }, vPassword) })
 	Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
 		TextLink("Annuler", inOnCancel)
@@ -412,16 +419,21 @@ private fun PickerRow(
 
 /*
 	Mot de passe généré : libellé, mot de passe coloré (lettres, chiffres,
-	symboles), bouton de nouveau tirage.
-	inLabel   : libellé
-	inValue   : mot de passe
-	inOnDraw  : nouveau tirage
+	symboles, sur plusieurs lignes s'il est long), bouton de nouveau tirage,
+	curseur de longueur (un nouveau mot de passe est tiré à chaque cran).
+	inLabel    : libellé
+	inValue    : mot de passe
+	inLength   : longueur demandée
+	inOnLength : nouvelle longueur
+	inOnDraw   : nouveau tirage
 */
 @Composable
 private fun GeneratedPassword(
-	inLabel  : String,
-	inValue  : String,
-	inOnDraw : () -> Unit
+	inLabel    : String,
+	inValue    : String,
+	inLength   : Int,
+	inOnLength : (Int) -> Unit,
+	inOnDraw   : () -> Unit
 )
 {
 	val vType = keeType()																		// styles de texte
@@ -431,9 +443,10 @@ private fun GeneratedPassword(
 			Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(KeeColors.void.copy(alpha = 0.6f)).padding(start = 14.dp),
 			verticalAlignment = Alignment.CenterVertically
 		) {
-			BasicText(secretAnnotated(inValue), Modifier.weight(1f), style = vType.secret, maxLines = 1)
+			BasicText(secretAnnotated(inValue), Modifier.weight(1f).padding(vertical = 8.dp), style = vType.secret)
 			IconAction(LineIcons.Refresh, "Nouveau tirage", inOnDraw)
 		}
+		Stepper("Longueur", inLength, kLengths) { if (it != inLength) inOnLength(it) }
 	}
 }
 
@@ -493,9 +506,16 @@ private fun ChangePart(
 {
 	val vType     = keeType()																	// styles de texte
 	val vItem     = remember(inVault, inId) { inVault.items().firstOrNull { it.id == inId } }	// compte
-	var vPassword by remember { mutableStateOf(generatePassword(PasswordOptions())) }		// nouveau mot de passe
+	var vOptions  by remember { mutableStateOf(PasswordOptions()) }							// réglages du générateur
+	var vPassword by remember { mutableStateOf(generatePassword(vOptions)) }				// nouveau mot de passe
 	vItem?.let { vShown -> PickerRow(vShown) {} }
-	GeneratedPassword("Nouveau mot de passe (et sa confirmation)", vPassword) { vPassword = generatePassword(PasswordOptions()) }
+	GeneratedPassword(
+		inLabel    = "Nouveau mot de passe (et sa confirmation)",
+		inValue    = vPassword,
+		inLength   = vOptions.length,
+		inOnLength = { vOptions = vOptions.copy(length = it); vPassword = generatePassword(vOptions) },
+		inOnDraw   = { vPassword = generatePassword(vOptions) }
+	)
 	BasicText("L'ancien mot de passe reste dans l'historique de l'entrée.", style = vType.bodySmall)
 	SilverButton("Remplir et mettre à jour", { inOnFill(inVault, inId, vPassword) })
 	Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
