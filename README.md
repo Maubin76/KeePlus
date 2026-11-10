@@ -115,6 +115,8 @@ au déverrouillage.
 
 ## Sécurité
 
+Le détail, expliqué sans prérequis et en schémas : [**la cryptographie de KeePlus**](doc/CRYPTOGRAPHIE.md).
+
 | Sujet | Ce que fait KeePlus |
 |---|---|
 | **Chiffrement du coffre** | KDBX 4 : clé dérivée par Argon2id (64 Mio), contenu chiffré en AES-256 |
