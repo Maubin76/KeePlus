@@ -4,6 +4,9 @@ import fr.maubin.keeplus.autofill.AutofillTarget
 import fr.maubin.keeplus.autofill.FormFields
 import fr.maubin.keeplus.autofill.FormNode
 import fr.maubin.keeplus.autofill.IdentityField
+import fr.maubin.keeplus.autofill.SavedLogin
+import fr.maubin.keeplus.autofill.saveLogin
+import fr.maubin.keeplus.autofill.savedLogin
 import fr.maubin.keeplus.autofill.addSignUp
 import fr.maubin.keeplus.autofill.suggestedUserName
 import fr.maubin.keeplus.autofill.autofillMatches
@@ -190,6 +193,29 @@ class AutofillTest
 		val vWeb  = vVault.autofillMatches(vSite).single()												// entrée du site
 		assertEquals("secret-2", vVault.draft(vWeb.id)!!.password)
 		assertEquals("https://compte.mabanque.fr", vWeb.url)
+	}
+
+	/*
+		Connexion tapée à la main : compte inconnu créé, mot de passe changé
+		mis à jour (l'ancien dans l'historique), compte identique laissé tel
+		quel ; l'identifiant est comparé sans les majuscules.
+	*/
+	@Test
+	fun savesTypedLogins()
+	{
+		val vApp    = AutofillTarget.of("com.mabanque.app", null)										// appli
+		val vFirst  = fEmpty.saveLogin(vApp, "Ma Banque", "Jean", "un")									// première connexion
+		val vId     = vFirst.autofillMatches(vApp).single().id											// entrée créée
+		assertEquals(SavedLogin.Same(vId), vFirst.savedLogin(vApp, "jean ", "un"))
+		assertSame(vFirst, vFirst.saveLogin(vApp, "Ma Banque", "JEAN", "un"))
+		assertEquals(SavedLogin.Update(vId, "Ma Banque"), vFirst.savedLogin(vApp, "jean", "deux"))
+		fClock.tick()
+		val vUpdated = vFirst.saveLogin(vApp, "Ma Banque", "jean", "deux")								// mot de passe changé
+		assertEquals("deux", vUpdated.draft(vId)!!.password)
+		assertEquals(listOf("un"), vUpdated.history(vId).map { it.password })
+		assertEquals(SavedLogin.New, vUpdated.savedLogin(vApp, "marie", "trois"))
+		assertEquals(SavedLogin.Same(vId), vUpdated.savedLogin(vApp, "", "deux"))
+		assertEquals(SavedLogin.New, vUpdated.savedLogin(AutofillTarget.of("com.autre.app", null), "jean", "deux"))
 	}
 
 	/*

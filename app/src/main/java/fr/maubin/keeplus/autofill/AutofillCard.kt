@@ -234,7 +234,7 @@ fun LoginCard(
 	AutofillCardFrame(inMotion, "Connexion", inRequest.name, inOnCancel) {
 		val vOpen = vVault																		// coffre affiché
 		if (vOpen == null) UnlockPart(inUnlock, "Déverrouillez KeePlus pour remplir ce formulaire.") { vNew -> inOnOpened(vNew); vVault = vNew }
-		else PickerPart(inRequest, vOpen, inOnPick)
+		else PickerPart(inRequest, vOpen, inOnPick = inOnPick)
 	}
 }
 
@@ -328,15 +328,8 @@ private fun ProposalPart(
 			KeeTextField(vState, if (vField.email) "vous@exemple.fr" else "Identifiant", inImeAction = ImeAction.Done)
 		}
 	}
-	Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-		BasicText(if (inRequest.newPasswords.size > 1) "Mot de passe (et sa confirmation)" else "Mot de passe", style = vType.label)
-		Row(
-			Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(KeeColors.void.copy(alpha = 0.6f)).padding(start = 14.dp),
-			verticalAlignment = Alignment.CenterVertically
-		) {
-			BasicText(secretAnnotated(vPassword), Modifier.weight(1f), style = vType.secret, maxLines = 1)
-			IconAction(LineIcons.Refresh, "Nouveau tirage", { vPassword = generatePassword(PasswordOptions()) })
-		}
+	GeneratedPassword(if (inRequest.newPasswords.size > 1) "Mot de passe (et sa confirmation)" else "Mot de passe", vPassword) {
+		vPassword = generatePassword(PasswordOptions())
 	}
 	SilverButton("Remplir et enregistrer", { inOnFill(inVault, vFields.map { it.second.text.toString().trim() }, vPassword) })
 	Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
@@ -349,15 +342,17 @@ private fun ProposalPart(
 	prochaine fois » (appli seulement, quand la liste montre des comptes qui
 	ne lui sont pas encore liés), puis la liste (quatre comptes
 	visibles environ, la suite défile).
-	inRequest : ce qu'il faut remplir
-	inVault   : coffre ouvert
-	inOnPick  : compte choisi (coffre, entrée, lier à l'appli)
+	inRequest  : ce qu'il faut remplir
+	inVault    : coffre ouvert
+	inLinkable : la pastille « proposer ici la prochaine fois » a un sens
+	inOnPick   : compte choisi (coffre, entrée, lier à l'appli)
 */
 @Composable
 private fun PickerPart(
-	inRequest : AutofillRequest,
-	inVault   : Vault,
-	inOnPick  : (Vault, UUID, Boolean) -> Unit
+	inRequest  : AutofillRequest,
+	inVault    : Vault,
+	inLinkable : Boolean = true,
+	inOnPick   : (Vault, UUID, Boolean) -> Unit
 )
 {
 	val vType     = keeType()																	// styles de texte
@@ -372,7 +367,7 @@ private fun PickerPart(
 		else                  -> inVault.items()
 	}																						// comptes affichés
 	SearchField(vQuery, inPlaceholder = "Chercher dans le coffre")
-	if (inRequest.target.isApp && (vText.isNotEmpty() || vMatches.isEmpty()))
+	if (inLinkable && inRequest.target.isApp && (vText.isNotEmpty() || vMatches.isEmpty()))
 	{
 		FilterPill(if (vRemember) "✓ Proposer ce compte ici la prochaine fois" else "Proposer ce compte ici la prochaine fois", vRemember) { vRemember = !vRemember }
 	}
@@ -411,6 +406,170 @@ private fun PickerRow(
 		Column(Modifier.weight(1f)) {
 			OneLine(inItem.title.ifBlank { "Sans titre" }, vType.title)
 			if (inItem.userName.isNotBlank()) OneLine(inItem.userName, vType.bodySmall)
+		}
+	}
+}
+
+/*
+	Mot de passe généré : libellé, mot de passe coloré (lettres, chiffres,
+	symboles), bouton de nouveau tirage.
+	inLabel   : libellé
+	inValue   : mot de passe
+	inOnDraw  : nouveau tirage
+*/
+@Composable
+private fun GeneratedPassword(
+	inLabel  : String,
+	inValue  : String,
+	inOnDraw : () -> Unit
+)
+{
+	val vType = keeType()																		// styles de texte
+	Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+		BasicText(inLabel, style = vType.label)
+		Row(
+			Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(KeeColors.void.copy(alpha = 0.6f)).padding(start = 14.dp),
+			verticalAlignment = Alignment.CenterVertically
+		) {
+			BasicText(secretAnnotated(inValue), Modifier.weight(1f), style = vType.secret, maxLines = 1)
+			IconAction(LineIcons.Refresh, "Nouveau tirage", inOnDraw)
+		}
+	}
+}
+
+/*
+	Changement de mot de passe : déverrouille d'abord le coffre si besoin,
+	fait choisir le compte (d'emblée s'il n'y en a qu'un pour cette appli ou
+	ce site), puis propose un nouveau mot de passe généré, rempli dans le
+	champ du nouveau et sa confirmation ; l'actuel est rempli depuis
+	l'entrée, qui est mise à jour (l'ancien rejoint son historique).
+	inMotion   : apparition et disparition
+	inRequest  : ce qu'il faut remplir
+	inOpened   : coffre déjà ouvert ; null s'il faut déverrouiller
+	inUnlock   : déverrouillage (mot de passe, empreinte, erreurs)
+	inOnOpened : coffre déverrouillé dans la carte (à garder)
+	inOnFill   : remplir et mettre à jour (coffre, entrée, nouveau mot de passe)
+	inOnCancel : fermeture sans remplir
+*/
+@Composable
+fun ChangeCard(
+	inMotion   : CardMotion,
+	inRequest  : AutofillRequest,
+	inOpened   : Vault?,
+	inUnlock   : AppController,
+	inOnOpened : (Vault) -> Unit,
+	inOnFill   : (Vault, UUID, String) -> Unit,
+	inOnCancel : () -> Unit
+)
+{
+	var vVault  by remember { mutableStateOf(inOpened) }											// coffre ouvert ; null avant
+	var vChosen by remember { mutableStateOf<UUID?>(null) }										// compte choisi ; null avant
+	AutofillCardFrame(inMotion, "Changer le mot de passe", inRequest.name, inOnCancel) {
+		val vOpen = vVault																		// coffre affiché
+		val vId   = vChosen ?: vOpen?.autofillMatches(inRequest.target)?.singleOrNull()?.id		// compte retenu
+		when
+		{
+			vOpen == null -> UnlockPart(inUnlock, "Déverrouillez KeePlus pour changer ce mot de passe.") { vNew -> inOnOpened(vNew); vVault = vNew }
+			vId == null   -> PickerPart(inRequest, vOpen, inLinkable = false) { _, vPicked, _ -> vChosen = vPicked }
+			else          -> ChangePart(vOpen, vId, inOnFill, inOnCancel)
+		}
+	}
+}
+
+/*
+	Proposition du nouveau mot de passe pour un compte.
+	inVault    : coffre ouvert
+	inId       : entrée du compte
+	inOnFill   : remplir et mettre à jour
+	inOnCancel : fermeture sans remplir
+*/
+@Composable
+private fun ChangePart(
+	inVault    : Vault,
+	inId       : UUID,
+	inOnFill   : (Vault, UUID, String) -> Unit,
+	inOnCancel : () -> Unit
+)
+{
+	val vType     = keeType()																	// styles de texte
+	val vItem     = remember(inVault, inId) { inVault.items().firstOrNull { it.id == inId } }	// compte
+	var vPassword by remember { mutableStateOf(generatePassword(PasswordOptions())) }		// nouveau mot de passe
+	vItem?.let { vShown -> PickerRow(vShown) {} }
+	GeneratedPassword("Nouveau mot de passe (et sa confirmation)", vPassword) { vPassword = generatePassword(PasswordOptions()) }
+	BasicText("L'ancien mot de passe reste dans l'historique de l'entrée.", style = vType.bodySmall)
+	SilverButton("Remplir et mettre à jour", { inOnFill(inVault, inId, vPassword) })
+	Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+		TextLink("Annuler", inOnCancel)
+	}
+}
+
+/*
+	Enregistrement d'identifiants tapés à la main (après « Enregistrer dans
+	KeePlus ? » d'Android) : déverrouille d'abord le coffre si besoin, puis
+	propose de créer l'entrée, ou de mettre à jour le mot de passe d'un
+	compte déjà connu ; un compte identique est simplement signalé.
+	inMotion   : apparition et disparition
+	inTarget   : appli ou site
+	inName     : nom à montrer
+	inUserName : identifiant tapé ; vide s'il n'y en avait pas
+	inPassword : mot de passe tapé
+	inOpened   : coffre déjà ouvert ; null s'il faut déverrouiller
+	inUnlock   : déverrouillage (mot de passe, empreinte, erreurs)
+	inOnOpened : coffre déverrouillé dans la carte (à garder)
+	inOnSave   : enregistrer dans ce coffre
+	inOnCancel : fermeture sans enregistrer
+*/
+@Composable
+fun SaveCard(
+	inMotion   : CardMotion,
+	inTarget   : AutofillTarget,
+	inName     : String,
+	inUserName : String,
+	inPassword : String,
+	inOpened   : Vault?,
+	inUnlock   : AppController,
+	inOnOpened : (Vault) -> Unit,
+	inOnSave   : (Vault) -> Unit,
+	inOnCancel : () -> Unit
+)
+{
+	val vType  = keeType()																		// styles de texte
+	var vVault by remember { mutableStateOf(inOpened) }											// coffre ouvert ; null avant
+	AutofillCardFrame(inMotion, "Enregistrer", inName, inOnCancel) {
+		val vOpen = vVault																		// coffre affiché
+		if (vOpen == null)
+		{
+			UnlockPart(inUnlock, "Déverrouillez KeePlus pour enregistrer ce compte.") { vNew -> inOnOpened(vNew); vVault = vNew }
+			return@AutofillCardFrame
+		}
+		val vState = remember(vOpen) { vOpen.savedLogin(inTarget, inUserName, inPassword) }	// compte connu ou non
+		Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+			BasicText("Identifiant", style = vType.label)
+			BasicText(inUserName.ifBlank { "(aucun)" }, style = vType.body)
+		}
+		Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+			BasicText("Mot de passe", style = vType.label)
+			BasicText("•".repeat(inPassword.length.coerceIn(8, 20)), style = vType.secret)
+		}
+		when (vState)
+		{
+			SavedLogin.New       -> SilverButton("Enregistrer dans le coffre", { inOnSave(vOpen) })
+			is SavedLogin.Update ->
+			{
+				BasicText("Le mot de passe de « ${vState.title} » a changé ; l'ancien restera dans son historique.", style = vType.bodySmall)
+				SilverButton("Mettre à jour", { inOnSave(vOpen) })
+			}
+			is SavedLogin.Same   ->
+			{
+				BasicText("Ce compte est déjà enregistré tel quel.", style = vType.bodySmall)
+				SilverButton("Fermer", inOnCancel)
+			}
+		}
+		if (vState !is SavedLogin.Same)
+		{
+			Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+				TextLink("Ne pas enregistrer", inOnCancel)
+			}
 		}
 	}
 }

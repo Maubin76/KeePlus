@@ -14,6 +14,7 @@ import android.service.autofill.FillRequest
 import android.service.autofill.FillResponse
 import android.service.autofill.InlinePresentation
 import android.service.autofill.SaveCallback
+import android.service.autofill.SaveInfo
 import android.service.autofill.SaveRequest
 import android.view.View
 import android.view.autofill.AutofillId
@@ -34,6 +35,7 @@ private val kRequestCodes         = AtomicInteger(1)										// codes des deman
 	demande un remplissage ; il y repère l'identifiant et le mot de passe,
 	puis propose :
 	- inscription : « Inscription » (carte qui propose identifiant et mot de passe) ;
+	- changement de mot de passe : « Changer » (carte qui propose le nouveau) ;
 	- coffre verrouillé : « Déverrouiller » (empreinte, puis choix) ;
 	- coffre ouvert : les entrées de cette appli ou de ce site, puis
 	  « Chercher dans KeePlus ».
@@ -41,6 +43,8 @@ private val kRequestCodes         = AtomicInteger(1)										// codes des deman
 	Aucune valeur ne quitte KeePlus avant l'appui : chaque suggestion passe
 	par AutofillActivity, qui rend l'identifiant et le mot de passe. Rien
 	n'est proposé dans KeePlus lui-même, ni avant la création du coffre.
+	Identifiants tapés à la main : Android propose de les enregistrer, puis
+	la carte « Enregistrer » crée l'entrée ou met son mot de passe à jour.
 */
 class KeeAutofillService : AutofillService()
 {
@@ -64,8 +68,7 @@ class KeeAutofillService : AutofillService()
 			inCallback.onSuccess(null)
 			return
 		}
-		val vRoot   = FormNode(children = List(vStructure.windowNodeCount) { toFormNode(vStructure.getWindowNodeAt(it).rootViewNode) })	// champs de l'écran
-		val vFields = findFormFields(vRoot)													// identifiant et mot de passe
+		val vFields = formFields(vStructure)													// identifiant et mot de passe
 		if (vFields == null)
 		{
 			inCallback.onSuccess(null)
@@ -89,6 +92,10 @@ class KeeAutofillService : AutofillService()
 		{
 			vResponse.addDataset(suggestion(vRequest, null, "Inscription", vRequest.name, vSpecs.firstOrNull()))
 		}
+		else if (vRequest.change)
+		{
+			vResponse.addDataset(suggestion(vRequest, null, "Changer", vRequest.name, vSpecs.firstOrNull()))
+		}
 		else if (vVault == null)
 		{
 			vResponse.addDataset(suggestion(vRequest, null, "Déverrouiller", vRequest.name, vSpecs.firstOrNull()))
@@ -101,13 +108,18 @@ class KeeAutofillService : AutofillService()
 			}
 			vResponse.addDataset(suggestion(vRequest, null, "Chercher", "dans KeePlus", vSpecs.getOrNull(vMatches.size)))
 		}
+		saveInfo(vFields)?.let(vResponse::setSaveInfo)
 		inCallback.onSuccess(vResponse.build())
 	}
 
 	/*
-		Enregistrement après une connexion : pas encore pris en charge (aucun
-		enregistrement n'est demandé dans la réponse).
-		inRequest  : demande
+		Enregistrement après une connexion, une inscription ou un changement
+		de mot de passe tapés à la main (Android l'a proposé et l'utilisateur
+		a accepté) : identifiant et mot de passe sont relus dans l'écran (ou
+		dans l'écran précédent pour une connexion en deux temps), puis la
+		carte « Enregistrer » s'ouvre (déverrouillage, création ou mise à jour
+		de l'entrée).
+		inRequest  : demande, avec les écrans remplis
 		inCallback : réponse
 	*/
 	override fun onSaveRequest(
@@ -115,7 +127,60 @@ class KeeAutofillService : AutofillService()
 		inCallback : SaveCallback
 	)
 	{
-		inCallback.onSuccess()
+		val vContexts  = inRequest.fillContexts.map { it.structure }								// écrans, du plus ancien au plus récent
+		val vStructure = vContexts.lastOrNull()														// dernier écran
+		val vPackage   = vStructure?.activityComponent?.packageName									// appli qui le montre
+		val vFields    = vStructure?.let(::formFields)												// champs du dernier écran
+		if (vStructure == null || vPackage == null || vPackage == packageName || vFields == null)
+		{
+			inCallback.onSuccess()
+			return
+		}
+		val vValues   = vContexts.fold(emptyMap<AutofillId, String>()) { vAll, vOne -> vAll + textValues(vOne) }	// valeurs saisies
+		val vPassword = (vFields.newPasswords.firstOrNull() ?: vFields.password)?.let { vValues[it] }?.takeIf { it.isNotEmpty() }	// mot de passe retenu
+		if (vPassword == null)
+		{
+			inCallback.onSuccess()
+			return
+		}
+		val vUser     = sequenceOf(vFields.userName, vFields.identities.firstOrNull()?.id)
+			.plus(vContexts.dropLast(1).reversed().asSequence().map { formFields(it)?.userName })
+			.firstNotNullOfOrNull { vId -> vId?.let { vValues[it] }?.trim()?.takeIf { it.isNotEmpty() } }
+			.orEmpty()																				// identifiant, ici ou à l'écran précédent
+		val vTarget   = AutofillTarget.of(vPackage, vFields.webDomain)								// appli ou site
+		val vIntent   = PendingIntent.getActivity(
+			this,
+			kRequestCodes.getAndIncrement(),
+			AutofillActivity.saveIntent(this, vTarget, vTarget.domain ?: appName(vPackage), vUser, vPassword),
+			PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_CANCEL_CURRENT
+		)																						// carte « Enregistrer »
+		inCallback.onSuccess(vIntent.intentSender)
+	}
+
+	/*
+		Champs d'un écran (toutes ses fenêtres) ; null s'il n'y a rien à remplir.
+		inStructure : écran
+	*/
+	private fun formFields(inStructure: AssistStructure): FormFields<AutofillId>? =
+		findFormFields(FormNode(children = List(inStructure.windowNodeCount) { toFormNode(inStructure.getWindowNodeAt(it).rootViewNode) }))
+
+	/*
+		Enregistrement à proposer quand l'utilisateur tape lui-même ses
+		identifiants : Android demande « Enregistrer dans KeePlus ? » quand le
+		mot de passe (nouveau, sinon actuel) a été saisi et que l'écran se
+		ferme ou que ses champs disparaissent (pages web). Rien n'est proposé
+		pour des valeurs remplies par KeePlus et laissées telles quelles.
+		inFields : champs de l'écran
+	*/
+	private fun saveInfo(inFields: FormFields<AutofillId>): SaveInfo?
+	{
+		val vRequired = inFields.newPasswords.firstOrNull() ?: inFields.password ?: return null	// champ indispensable
+		val vOptional = (listOfNotNull(inFields.userName, inFields.password) + inFields.identities.map { it.id } + inFields.newPasswords)
+			.distinct().filter { it != vRequired }													// autres champs relus
+		return SaveInfo.Builder(SaveInfo.SAVE_DATA_TYPE_USERNAME or SaveInfo.SAVE_DATA_TYPE_PASSWORD, arrayOf(vRequired))
+			.apply { if (vOptional.isNotEmpty()) setOptionalIds(vOptional.toTypedArray()) }
+			.setFlags(SaveInfo.FLAG_SAVE_ON_ALL_VIEWS_INVISIBLE)
+			.build()
 	}
 
 	/*
@@ -211,6 +276,24 @@ private fun inlinePresentation(
 		.build()																				// contenu de la pastille
 	val vSlice: Slice = vContent.slice																// contenu pour Android
 	return InlinePresentation(vSlice, inSpec, false)
+}
+
+/*
+	Textes saisis dans les champs d'un écran, par champ.
+	inStructure : écran
+*/
+private fun textValues(inStructure: AssistStructure): Map<AutofillId, String>
+{
+	val vResult = mutableMapOf<AutofillId, String>()											// valeurs trouvées
+	fun walk(inNode: AssistStructure.ViewNode)
+	{
+		val vId    = inNode.autofillId																// champ
+		val vValue = inNode.autofillValue?.takeIf { it.isText }?.textValue?.toString()			// texte saisi
+		if (vId != null && vValue != null) vResult[vId] = vValue
+		for (vIndex in 0 until inNode.childCount) walk(inNode.getChildAt(vIndex))
+	}
+	for (vIndex in 0 until inStructure.windowNodeCount) walk(inStructure.getWindowNodeAt(vIndex).rootViewNode)
+	return vResult
 }
 
 /*

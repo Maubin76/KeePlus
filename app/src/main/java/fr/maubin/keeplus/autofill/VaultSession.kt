@@ -13,6 +13,9 @@ import fr.maubin.keeplus.vault.VaultStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -28,6 +31,7 @@ import java.io.File
 	fOwnUntil  : fin de validité de fOwn (horloge depuis le démarrage, ms)
 	fListening : extinction de l'écran écoutée
 	fScope     : enregistrements qui survivent à l'écran qui les a lancés
+	fPending   : nombre d'enregistrements en cours
 */
 object VaultSession
 {
@@ -37,6 +41,7 @@ object VaultSession
 	@Volatile private var fOwnUntil  : Long           = 0L
 	private var fListening           : Boolean        = false
 	private val fScope                                = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+	private val fPending                              = MutableStateFlow(0)
 
 	/*
 		L'appli est affichée : son coffre, s'il est ouvert, sert aussi à
@@ -130,8 +135,9 @@ object VaultSession
 	/*
 		Lance edit sans attendre : l'écran d'auto-remplissage se ferme tout de
 		suite (le formulaire est rempli aussitôt), l'enregistrement (Argon2,
-		quelques secondes) se poursuit en arrière-plan. Un échec est ignoré :
-		le formulaire est rempli quoi qu'il arrive.
+		quelques secondes) se poursuit en arrière-plan, le processus étant
+		gardé en vie par SaveWorker. Un échec est ignoré : le formulaire est
+		rempli quoi qu'il arrive.
 		inContext : contexte de l'application
 		inVault   : coffre utilisé
 		inChange  : modification
@@ -142,7 +148,26 @@ object VaultSession
 		inChange  : (Vault) -> Vault
 	)
 	{
-		fScope.launch { runCatching { edit(inContext, inVault, inChange) } }
+		fPending.update { it + 1 }
+		SaveWorker.start(inContext)
+		fScope.launch {
+			try
+			{
+				runCatching { edit(inContext, inVault, inChange) }
+			}
+			finally
+			{
+				fPending.update { it - 1 }
+			}
+		}
+	}
+
+	/*
+		Attend la fin des enregistrements en cours.
+	*/
+	suspend fun awaitEdits()
+	{
+		fPending.first { it == 0 }
 	}
 
 	/*

@@ -31,6 +31,8 @@ private const val kName      = "keeplus.autofill.name"									// nom à montrer
 private const val kNew       = "keeplus.autofill.new"									// champs d'un nouveau mot de passe
 private const val kIdentity  = "keeplus.autofill.identity"								// champs d'identité d'une inscription
 private const val kEmails    = "keeplus.autofill.emails"									// champs d'identité qui attendent un e-mail
+private const val kSaveUser  = "keeplus.autofill.save.user"								// identifiant tapé à enregistrer
+private const val kSavePass  = "keeplus.autofill.save.password"							// mot de passe tapé à enregistrer
 
 /*
 	Ce qu'il faut remplir.
@@ -59,6 +61,11 @@ class AutofillRequest(
 		Vrai pour une inscription : mot de passe à créer, sans mot de passe actuel.
 	*/
 	val signUp: Boolean get() = password == null && newPasswords.isNotEmpty()
+
+	/*
+		Vrai pour un changement de mot de passe : actuel, puis nouveau.
+	*/
+	val change: Boolean get() = password != null && newPasswords.isNotEmpty()
 }
 
 /*
@@ -71,7 +78,11 @@ class AutofillRequest(
 	  site, recherche dans tout le coffre ; un seul compte correspondant
 	  est rempli sans choix ;
 	- inscription : même carte (voir SignUpCard), qui propose identifiant
-	  et mot de passe, remplit et enregistre le compte.
+	  et mot de passe, remplit et enregistre le compte ;
+	- changement de mot de passe : même carte (voir ChangeCard), qui
+	  propose le nouveau, remplit l'actuel et le nouveau, met l'entrée à jour ;
+	- enregistrement d'identifiants tapés à la main (après « Enregistrer
+	  dans KeePlus ? » d'Android) : même carte (voir SaveCard).
 	Pour une appli, l'entrée choisie lui est liée (réglable) : elle sera
 	proposée d'emblée la prochaine fois. Écran protégé (FLAG_SECURE).
 	fRequest : ce qu'il faut remplir
@@ -92,10 +103,13 @@ class AutofillActivity : FragmentActivity()
 		super.onCreate(inState)
 		window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
 		enableEdgeToEdge(SystemBarStyle.dark(android.graphics.Color.TRANSPARENT), SystemBarStyle.dark(android.graphics.Color.TRANSPARENT))
+		val vSaved   = intent.getStringExtra(kSavePass)											// mot de passe tapé à enregistrer
+		if (vSaved != null) return showSave(vSaved)
 		fRequest = request(intent) ?: return finishEmpty()
 		val vChosen  = intent.getStringExtra(kEntry)?.let(UUID::fromString)						// entrée de la suggestion
 		val vOpened  = VaultSession.vault()														// coffre déjà ouvert
 		if (fRequest.signUp) return showSignUp(vOpened)
+		if (fRequest.change) return showChange(vOpened)
 		if (vOpened != null && vChosen != null && vOpened.draft(vChosen) != null) return fill(vOpened, vChosen, false)
 		val vStore   = phoneStore(this)															// accès au coffre
 		val vUnlock  = AppController(vStore, { null }, AndroidBiometric(this))					// déverrouillage
@@ -154,9 +168,103 @@ class AutofillActivity : FragmentActivity()
 	}
 
 	/*
+		Changement de mot de passe : carte en haut de l'écran, par-dessus l'appli.
+		inOpened : coffre déjà ouvert ; null s'il faut déverrouiller
+	*/
+	private fun showChange(inOpened: Vault?)
+	{
+		val vStore  = phoneStore(this)																// accès au coffre
+		val vUnlock = AppController(vStore, { null }, AndroidBiometric(this))						// déverrouillage
+		val vMotion = CardMotion().also { fMotion = it }												// apparition de la carte
+		setContent {
+			KeePlusTheme {
+				ChangeCard(
+					inMotion   = vMotion,
+					inRequest  = fRequest,
+					inOpened   = inOpened,
+					inUnlock   = vUnlock,
+					inOnOpened = { vNew ->
+						vUnlock.open(vNew)
+						vUnlock.lock()
+						VaultSession.keep(this@AutofillActivity, vNew, vStore)
+					},
+					inOnFill   = ::fillChange,
+					inOnCancel = ::finishEmpty
+				)
+			}
+		}
+	}
+
+	/*
+		Enregistrement d'identifiants tapés à la main : carte en haut de
+		l'écran (déverrouillage, puis création ou mise à jour de l'entrée).
+		inPassword : mot de passe tapé
+	*/
+	private fun showSave(inPassword: String)
+	{
+		val vPackage = intent.getStringExtra(kPackage) ?: return finish()						// appli
+		val vTarget  = AutofillTarget.of(vPackage, intent.getStringExtra(kDomain))				// appli ou site
+		val vName    = intent.getStringExtra(kName) ?: vTarget.label								// nom à montrer
+		val vUser    = intent.getStringExtra(kSaveUser).orEmpty()									// identifiant tapé
+		val vStore   = phoneStore(this)															// accès au coffre
+		val vUnlock  = AppController(vStore, { null }, AndroidBiometric(this))					// déverrouillage
+		val vMotion  = CardMotion().also { fMotion = it }											// apparition de la carte
+		setContent {
+			KeePlusTheme {
+				SaveCard(
+					inMotion   = vMotion,
+					inTarget   = vTarget,
+					inName     = vName,
+					inUserName = vUser,
+					inPassword = inPassword,
+					inOpened   = VaultSession.vault(),
+					inUnlock   = vUnlock,
+					inOnOpened = { vNew ->
+						vUnlock.open(vNew)
+						vUnlock.lock()
+						VaultSession.keep(this@AutofillActivity, vNew, vStore)
+					},
+					inOnSave   = { vVault ->
+						VaultSession.editLater(applicationContext, vVault) { it.saveLogin(vTarget, vName, vUser, inPassword) }
+						leave()
+					},
+					inOnCancel = ::leave
+				)
+			}
+		}
+	}
+
+	/*
+		Changement de mot de passe accepté : rend à Android l'identifiant et
+		le mot de passe actuel de l'entrée, et le nouveau dans chaque champ de
+		nouveau mot de passe, puis met l'entrée à jour (l'ancien mot de passe
+		rejoint son historique).
+		inVault    : coffre ouvert
+		inId       : entrée du compte
+		inPassword : nouveau mot de passe
+	*/
+	@Suppress("DEPRECATION")
+	private fun fillChange(
+		inVault    : Vault,
+		inId       : UUID,
+		inPassword : String
+	)
+	{
+		val vDraft   = inVault.draft(inId) ?: return finishEmpty()									// entrée
+		val vBuilder = Dataset.Builder(presentation(this, vDraft.title, vDraft.userName))			// valeurs à remplir
+		fRequest.userName?.let { vBuilder.setValue(it, AutofillValue.forText(vDraft.userName)) }
+		fRequest.password?.let { vBuilder.setValue(it, AutofillValue.forText(vDraft.password)) }
+		for (vId in fRequest.newPasswords) vBuilder.setValue(vId, AutofillValue.forText(inPassword))
+		setResult(Activity.RESULT_OK, Intent().putExtra(AutofillManager.EXTRA_AUTHENTICATION_RESULT, vBuilder.build()))
+		VaultSession.editLater(applicationContext, inVault) { it.changePassword(inId, inPassword) }
+		leave()
+	}
+
+	/*
 		Inscription acceptée : rend à Android les valeurs des champs
 		d'identité et le mot de passe (dans chaque champ de nouveau mot de
-		passe), puis ajoute le compte au coffre.
+		passe), puis ajoute le compte au coffre (ou met à jour le mot de passe
+		d'un compte de même identifiant déjà enregistré pour cette cible).
 		inVault    : coffre ouvert
 		inValues   : valeurs des champs d'identité, dans l'ordre
 		inPassword : mot de passe choisi
@@ -177,7 +285,7 @@ class AutofillActivity : FragmentActivity()
 		setResult(Activity.RESULT_OK, Intent().putExtra(AutofillManager.EXTRA_AUTHENTICATION_RESULT, vBuilder.build()))
 		val vTarget  = fRequest.target																// appli ou site
 		val vTitle   = fRequest.name																// titre de l'entrée
-		VaultSession.editLater(applicationContext, inVault) { it.addSignUp(vTarget, vTitle, vUser, inPassword) }
+		VaultSession.editLater(applicationContext, inVault) { it.saveLogin(vTarget, vTitle, vUser, inPassword) }
 		leave()
 	}
 
@@ -250,6 +358,29 @@ class AutofillActivity : FragmentActivity()
 				.putParcelableArrayListExtra(kNew, ArrayList(inRequest.newPasswords))
 				.putParcelableArrayListExtra(kIdentity, ArrayList(inRequest.identities.map { it.id }))
 				.putExtra(kEmails, inRequest.identities.map { it.email }.toBooleanArray())
+
+		/*
+			Intention qui ouvre la carte « Enregistrer » pour des identifiants
+			tapés à la main.
+			inContext  : contexte
+			inTarget   : appli ou site
+			inName     : nom à montrer
+			inUserName : identifiant tapé ; vide s'il n'y en avait pas
+			inPassword : mot de passe tapé
+		*/
+		fun saveIntent(
+			inContext  : Context,
+			inTarget   : AutofillTarget,
+			inName     : String,
+			inUserName : String,
+			inPassword : String
+		): Intent =
+			Intent(inContext, AutofillActivity::class.java)
+				.putExtra(kPackage, inTarget.packageName)
+				.putExtra(kDomain, inTarget.domain)
+				.putExtra(kName, inName)
+				.putExtra(kSaveUser, inUserName)
+				.putExtra(kSavePass, inPassword)
 
 		/*
 			Ce qu'il faut remplir, d'après l'intention ; null si elle est
