@@ -39,11 +39,10 @@ fun DesktopSettings(inBackups: File?)
 		BasicText("Démarrage", style = vType.bodySmall)
 		if (WindowsStartup.exe == null)
 		{
-			BasicText("Le démarrage avec Windows est proposé une fois KeePlus installé.", style = vType.bodySmall)
+			BasicText("Disponible une fois KeePlus installé.", style = vType.body)
 		}
 		else
 		{
-			BasicText("Lancer KeePlus avec Windows, dans la zone de notification : le téléphone peut se synchroniser sans ouvrir la fenêtre.", style = vType.body)
 			Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
 				for (vChoice in listOf(true, false))
 				{

@@ -92,15 +92,14 @@ fun SettingsScreen(
 		}
 
 		SettingsSection("Verrouillage automatique") {
-			BasicText("Après une période sans aucun geste", style = vType.body)
+			BasicText("Après inactivité", style = vType.body)
 			Choices(kIdleChoices, vSettings.idleMinutes, { "$it min" }) { inController.updateSettings(vSettings.copy(idleMinutes = it)) }
-			BasicText("Quand l'appli passe en arrière-plan (ou la fenêtre est réduite)", style = vType.body)
+			BasicText("En arrière-plan", style = vType.body)
 			Choices(kHiddenChoices, vSettings.hiddenSeconds, { if (it == 0) "Aussitôt" else if (it < 60) "$it s" else "${it / 60} min" }) { inController.updateSettings(vSettings.copy(hiddenSeconds = it)) }
-			BasicText("Un délai laisse le temps d'aller coller un mot de passe dans une autre appli.", style = vType.bodySmall)
 		}
 
 		SettingsSection("Presse-papiers") {
-			BasicText("Un secret copié est effacé après", style = vType.body)
+			BasicText("Effacé après", style = vType.body)
 			Choices(kClipboardChoices, vSettings.clipboardSeconds, { "$it s" }) { inController.updateSettings(vSettings.copy(clipboardSeconds = it)) }
 		}
 
@@ -108,10 +107,7 @@ fun SettingsScreen(
 		{
 			var vReady by remember { mutableStateOf(inController.biometricReady) }			// empreinte active
 			SettingsSection("Empreinte") {
-				BasicText(
-					if (vReady) "Le coffre se déverrouille par l'empreinte." else "L'empreinte n'est pas active : elle sera proposée après un déverrouillage par mot de passe.",
-					style = vType.body
-				)
+				BasicText(if (vReady) "Active" else "Inactive", style = vType.body)
 				if (vReady) GhostButton("Désactiver l'empreinte", { inController.disableBiometric(); inController.offerBiometricAgain(); vReady = false })
 				else TextLink("Proposer l'empreinte au prochain déverrouillage", { inController.offerBiometricAgain() })
 			}
@@ -122,9 +118,8 @@ fun SettingsScreen(
 			SettingsSection("Mot de passe maître") { MasterPasswordForm(inController) }
 
 			SettingsSection("Sauvegardes") {
-				BasicText("Une copie du coffre chiffré est faite avant la première modification de chaque jour. Elle s'ouvre avec le mot de passe maître qu'avait le coffre ce jour-là.", style = vType.bodySmall)
 				val vBackups = remember(inController.screen) { inController.backups() }			// sauvegardes
-				if (vBackups.isEmpty()) BasicText("Aucune sauvegarde pour l'instant.", style = vType.bodySmall.copy(color = KeeColors.textFaint))
+				if (vBackups.isEmpty()) BasicText("Aucune sauvegarde.", style = vType.bodySmall.copy(color = KeeColors.textFaint))
 				for (vBackup in vBackups)
 				{
 					Row(
@@ -144,23 +139,17 @@ fun SettingsScreen(
 		inController.updates?.let { vUpdates ->
 			var vMessage by remember { mutableStateOf<String?>(null) }							// résultat de la vérification
 			SettingsSection("Mises à jour") {
-				BasicText("Version installée : ${vUpdates.version ?: "inconnue (version de développement)"}", style = vType.body)
-				BasicText("Chercher une nouvelle version au lancement", style = vType.bodySmall)
+				BasicText("Version ${vUpdates.version ?: "de développement"}", style = vType.body)
 				Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
 					FilterPill("Au lancement", vSettings.updates) { inController.updateSettings(vSettings.copy(updates = true)) }
 					FilterPill("Jamais", !vSettings.updates) { inController.updateSettings(vSettings.copy(updates = false)) }
 				}
 				vMessage?.let { BasicText(it, style = vType.bodySmall) }
 				GhostButton("Vérifier maintenant", { vMessage = null; vUpdates.checkNow { vMessage = it } })
-				BasicText("Les versions sont publiées sur GitHub ; seule l'adresse IP de l'appareil est connue de GitHub lors de la vérification.", style = vType.bodySmall.copy(color = KeeColors.textFaint))
 			}
 		}
 
 		inExtra?.let { vExtra -> Column(verticalArrangement = Arrangement.spacedBy(22.dp)) { vExtra() } }
-
-		SettingsSection("À propos") {
-			BasicText("KeePlus — coffre au format KeePass (KDBX 4, Argon2id, AES-256), sans cloud ni compte.", style = vType.bodySmall)
-		}
 	}
 	vRestore?.let { vBackup ->
 		ConfirmDialog(
@@ -207,7 +196,6 @@ private fun MasterPasswordForm(inController: AppController)
 		GhostButton("Changer le mot de passe maître", { vOpen = true; vResult = null })
 		return
 	}
-	BasicText("Les autres appareils demanderont le nouveau mot de passe à leur prochain déverrouillage.", style = vType.bodySmall)
 	SecretField(vCurrent, "Mot de passe actuel", inImeAction = ImeAction.Next)
 	SecretField(vNew, "Nouveau mot de passe", inImeAction = ImeAction.Next)
 	SecretField(vConfirm, "Confirmez le nouveau mot de passe", inError = vProblem?.startsWith("Les deux") == true)

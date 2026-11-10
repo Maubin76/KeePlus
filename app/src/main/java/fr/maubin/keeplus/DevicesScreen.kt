@@ -101,7 +101,7 @@ fun DevicesScreen(
 			BasicText("Appareils", Modifier.weight(1f).padding(start = 4.dp), style = vType.headline)
 		}
 		Row(verticalAlignment = Alignment.CenterVertically) {
-			BasicText(statusText(vStatus), Modifier.weight(1f), style = vType.bodySmall.copy(color = if (vStatus is PhoneStatus.Failed) KeeColors.danger else KeeColors.textMuted))
+			BasicText(statusText(vStatus).orEmpty(), Modifier.weight(1f), style = vType.bodySmall.copy(color = if (vStatus is PhoneStatus.Failed) KeeColors.danger else KeeColors.textMuted))
 			if (vPeers.enabled && vPeers.pcs.isNotEmpty()) IconAction(LineIcons.Sync, "Synchroniser maintenant", { inSync.syncSoon() }, inTint = KeeColors.text)
 		}
 
@@ -125,7 +125,7 @@ fun DevicesScreen(
 		}
 
 		Section("Réseau de la maison") {
-			BasicText("Le téléphone ne se synchronise que sur ces Wi-Fi. Ils sont ajoutés à l'appairage.", style = vType.bodySmall)
+			if (vPeers.home.isEmpty()) BasicText("Aucun réseau.", style = vType.bodySmall.copy(color = KeeColors.textFaint))
 			FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
 				for (vNetwork in vPeers.home)
 				{
@@ -139,10 +139,6 @@ fun DevicesScreen(
 				FilterPill("Activée", vPeers.enabled) { inSync.setEnabled(true) }
 				FilterPill("Désactivée", !vPeers.enabled) { inSync.setEnabled(false) }
 			}
-			BasicText(
-				"Seul le fichier chiffré du coffre circule, sur le Wi-Fi de la maison, dans un canal lui-même chiffré. Rien ne passe par internet. Si le coffre a changé des deux côtés, la fusion se fait au déverrouillage.",
-				style = vType.bodySmall.copy(color = KeeColors.textFaint)
-			)
 		}
 	}
 	if (vScan)
@@ -177,18 +173,18 @@ fun DevicesScreen(
 }
 
 /*
-	État de la synchronisation, en clair.
+	État de la synchronisation, en clair ; null sans PC appairé (la liste vide le dit).
 	inStatus : état
 */
-private fun statusText(inStatus: PhoneStatus): String =
+private fun statusText(inStatus: PhoneStatus): String? =
 	when (inStatus)
 	{
 		PhoneStatus.Disabled  -> "Synchronisation désactivée."
-		PhoneStatus.Unpaired  -> "Appairez un PC pour partager le coffre sur le Wi-Fi de la maison."
+		PhoneStatus.Unpaired  -> null
 		is PhoneStatus.Away   -> inStatus.reason
 		PhoneStatus.Working   -> "Synchronisation en cours…"
 		is PhoneStatus.Idle   -> "À jour avec ${inStatus.pcs.joinToString(", ")}."
-		PhoneStatus.Pending   -> "Le coffre a changé des deux côtés : la fusion se fera au déverrouillage."
+		PhoneStatus.Pending   -> "Fusion au prochain déverrouillage."
 		is PhoneStatus.Failed -> inStatus.message
 	}
 

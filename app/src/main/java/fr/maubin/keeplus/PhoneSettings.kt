@@ -59,7 +59,6 @@ fun PhoneSettings(inStore: VaultStore)
 	AutofillSettings()
 	Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
 		BasicText("Export", style = vType.bodySmall)
-		BasicText("Copie du coffre chiffré dans un fichier de votre choix, à garder hors du téléphone. Il s'ouvre avec le mot de passe maître.", style = vType.bodySmall)
 		vResult?.let { BasicText(it, style = vType.body.copy(color = KeeColors.success)) }
 		ErrorLine(vError)
 		GhostButton("Exporter le coffre", { vResult = null; vError = null; vExport.launch("KeePlus-${LocalDate.now()}.kdbx") })
@@ -85,18 +84,15 @@ private fun AutofillSettings()
 		BasicText("Auto-remplissage", style = vType.bodySmall)
 		if (vEnabled)
 		{
-			BasicText("Actif : touchez un champ de connexion, KeePlus propose vos comptes.", style = vType.body.copy(color = KeeColors.success))
-			BasicText("Pour l'arrêter : réglages d'Android, « Mots de passe et saisie automatique ».", style = vType.bodySmall)
+			BasicText("Actif", style = vType.body.copy(color = KeeColors.success))
 		}
 		else
 		{
-			BasicText("KeePlus remplit l'identifiant et le mot de passe dans les applis et les sites, après votre empreinte. Rien n'est rempli sans votre appui.", style = vType.bodySmall)
 			GhostButton("Activer l'auto-remplissage", {
 				runCatching {
 					vContext.startActivity(Intent(Settings.ACTION_REQUEST_SET_AUTOFILL_SERVICE, Uri.parse("package:${vContext.packageName}")))
 				}
 			})
 		}
-		BasicText("Dans Chrome ou Brave, choisissez aussi « Saisie automatique avec un autre service » (Paramètres › Saisie automatique et mots de passe › Services de saisie automatique). Firefox n'a rien à régler.", style = vType.bodySmall.copy(color = KeeColors.textFaint))
 	}
 }

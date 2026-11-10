@@ -250,10 +250,10 @@ class AndroidSync private constructor(
 				{
 					!vPeers.enabled                                -> PhoneStatus.Disabled
 					vPeers.pcs.isEmpty()                           -> PhoneStatus.Unpaired
-					!vNet.onWifi                                   -> PhoneStatus.Away("Pas de Wi-Fi : synchronisation au retour à la maison.")
-					!vNet.unmetered                                -> PhoneStatus.Away("Wi-Fi facturé à l'usage : pas de synchronisation.")
+					!vNet.onWifi                                   -> PhoneStatus.Away("Pas de Wi-Fi.")
+					!vNet.unmetered                                -> PhoneStatus.Away("Wi-Fi facturé à l'usage.")
 					vNet.wifi == null                              -> PhoneStatus.Away(if (!vNet.permission) "Autorisez la localisation pour reconnaître le Wi-Fi de la maison." else "Nom du Wi-Fi illisible : activez la localisation du téléphone.")
-					!isHomeNetwork(listOf(vNet.wifi), vPeers.home) -> PhoneStatus.Away("Hors du réseau de la maison (Wi-Fi « ${vNet.wifi.value} ») : synchronisation au retour.")
+					!isHomeNetwork(listOf(vNet.wifi), vPeers.home) -> PhoneStatus.Away("Hors du réseau de la maison (« ${vNet.wifi.value} »).")
 					else                                           ->
 					{
 						fStatus.value = PhoneStatus.Working
@@ -333,7 +333,7 @@ class AndroidSync private constructor(
 			!fEngine.peers().enabled      -> PhoneStatus.Disabled
 			fEngine.peers().pcs.isEmpty() -> PhoneStatus.Unpaired
 			fEngine.pending().isNotEmpty() -> PhoneStatus.Pending
-			else                          -> PhoneStatus.Away("En attente de la première synchronisation.")
+			else                          -> PhoneStatus.Away("Pas encore synchronisé.")
 		}
 
 	companion object
