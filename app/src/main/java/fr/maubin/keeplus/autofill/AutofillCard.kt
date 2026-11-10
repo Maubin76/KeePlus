@@ -522,14 +522,14 @@ private fun ChangePart(
 		TextLink("Autre compte", inOnOther)
 	}
 	Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-		BasicText("Mot de passe actuel (repris de KeePlus)", style = vType.label)
+		BasicText("Mot de passe actuel", style = vType.label)
 		Row(
 			Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(KeeColors.void.copy(alpha = 0.6f)).padding(start = 14.dp),
 			verticalAlignment = Alignment.CenterVertically
 		) {
 			val vText = when
 			{
-				vCurrent.isEmpty() -> "(aucun dans l'entrée)"
+				vCurrent.isEmpty() -> "Aucun"
 				vShown             -> vCurrent
 				else               -> "•".repeat(vCurrent.length.coerceIn(8, 20))
 			}																					// texte affiché
@@ -541,13 +541,12 @@ private fun ChangePart(
 		}
 	}
 	GeneratedPassword(
-		inLabel    = "Nouveau mot de passe (et sa confirmation)",
+		inLabel    = "Nouveau mot de passe",
 		inValue    = vPassword,
 		inLength   = vOptions.length,
 		inOnLength = { vOptions = vOptions.copy(length = it); vPassword = generatePassword(vOptions) },
 		inOnDraw   = { vPassword = generatePassword(vOptions) }
 	)
-	BasicText("L'ancien mot de passe reste dans l'historique de l'entrée.", style = vType.bodySmall)
 	SilverButton("Remplir et mettre à jour", { inOnFill(inVault, inId, vPassword) })
 	Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
 		TextLink("Annuler", inOnCancel)
