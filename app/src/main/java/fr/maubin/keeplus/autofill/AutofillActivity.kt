@@ -17,9 +17,11 @@ import androidx.core.content.IntentCompat
 import androidx.fragment.app.FragmentActivity
 import fr.maubin.keeplus.AndroidBiometric
 import fr.maubin.keeplus.phoneStore
+import fr.maubin.keeplus.settings.SettingsStore
 import fr.maubin.keeplus.ui.AppController
 import fr.maubin.keeplus.ui.theme.KeePlusTheme
 import fr.maubin.keeplus.vault.Vault
+import java.io.File
 import java.util.UUID
 
 private const val kUserField = "keeplus.autofill.user"									// champ de l'identifiant
@@ -112,7 +114,7 @@ class AutofillActivity : FragmentActivity()
 		if (fRequest.change) return showChange(vOpened)
 		if (vOpened != null && vChosen != null && vOpened.draft(vChosen) != null) return fill(vOpened, vChosen, false)
 		val vStore   = phoneStore(this)															// accès au coffre
-		val vUnlock  = AppController(vStore, { null }, AndroidBiometric(this))					// déverrouillage
+		val vUnlock  = AppController(vStore, { null }, AndroidBiometric(this), fSettings = settingsStore())					// déverrouillage
 		val vMotion  = CardMotion().also { fMotion = it }											// apparition de la carte
 		setContent {
 			KeePlusTheme {
@@ -146,7 +148,7 @@ class AutofillActivity : FragmentActivity()
 	private fun showSignUp(inOpened: Vault?)
 	{
 		val vStore  = phoneStore(this)																// accès au coffre
-		val vUnlock = AppController(vStore, { null }, AndroidBiometric(this))						// déverrouillage
+		val vUnlock = AppController(vStore, { null }, AndroidBiometric(this), fSettings = settingsStore())						// déverrouillage
 		val vMotion = CardMotion().also { fMotion = it }												// apparition de la carte
 		setContent {
 			KeePlusTheme {
@@ -174,7 +176,7 @@ class AutofillActivity : FragmentActivity()
 	private fun showChange(inOpened: Vault?)
 	{
 		val vStore  = phoneStore(this)																// accès au coffre
-		val vUnlock = AppController(vStore, { null }, AndroidBiometric(this))						// déverrouillage
+		val vUnlock = AppController(vStore, { null }, AndroidBiometric(this), fSettings = settingsStore())						// déverrouillage
 		val vMotion = CardMotion().also { fMotion = it }												// apparition de la carte
 		setContent {
 			KeePlusTheme {
@@ -207,7 +209,7 @@ class AutofillActivity : FragmentActivity()
 		val vName    = intent.getStringExtra(kName) ?: vTarget.label								// nom à montrer
 		val vUser    = intent.getStringExtra(kSaveUser).orEmpty()									// identifiant tapé
 		val vStore   = phoneStore(this)															// accès au coffre
-		val vUnlock  = AppController(vStore, { null }, AndroidBiometric(this))					// déverrouillage
+		val vUnlock  = AppController(vStore, { null }, AndroidBiometric(this), fSettings = settingsStore())					// déverrouillage
 		val vMotion  = CardMotion().also { fMotion = it }											// apparition de la carte
 		setContent {
 			KeePlusTheme {
@@ -315,6 +317,11 @@ class AutofillActivity : FragmentActivity()
 		}
 		leave()
 	}
+
+	/*
+		Réglages de l'appli (fréquence du mot de passe maître avec l'empreinte).
+	*/
+	private fun settingsStore(): SettingsStore = SettingsStore(File(filesDir, "reglages.json"))
 
 	/*
 		Ferme sans rien remplir.

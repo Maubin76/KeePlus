@@ -10,12 +10,15 @@ private val kSettingsJson = Json { ignoreUnknownKeys = true; encodeDefaults = tr
 val kIdleChoices      = listOf(1, 5, 15, 30)											// délais d'inactivité proposés (min)
 val kHiddenChoices    = listOf(0, 30, 60, 300)										// délais en arrière-plan proposés (s)
 val kClipboardChoices = listOf(15, 30, 60)												// durées du presse-papiers proposées (s)
+val kPasswordChoices  = listOf(24, 48, 168, 0)											// fréquences du mot de passe maître avec l'empreinte (h ; 0 : jamais)
 
 /*
 	Réglages de l'appli, propres à l'appareil (non synchronisés).
 	idleMinutes      : verrouillage après ce nombre de minutes sans geste
 	hiddenSeconds    : verrouillage après ce nombre de secondes en arrière-plan (0 : aussitôt)
 	clipboardSeconds : un secret copié est effacé du presse-papiers après ce délai
+	passwordHours    : avec l'empreinte, le mot de passe maître est redemandé
+	                   après ce nombre d'heures sans l'avoir saisi (0 : jamais)
 	updates          : nouvelle version cherchée au lancement
 	ignoredUpdate    : version que l'utilisateur ne veut plus se voir proposer ; vide sans
 */
@@ -24,6 +27,7 @@ data class KeeSettings(
 	val idleMinutes      : Int     = 5,
 	val hiddenSeconds    : Int     = 60,
 	val clipboardSeconds : Int     = 30,
+	val passwordHours    : Int     = 168,
 	val updates          : Boolean = true,
 	val ignoredUpdate    : String  = ""
 )

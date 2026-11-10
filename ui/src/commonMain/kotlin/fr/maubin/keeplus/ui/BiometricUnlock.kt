@@ -30,6 +30,13 @@ interface BiometricUnlock
 	val offered: Boolean
 
 	/*
+		Date du dernier déverrouillage par le mot de passe maître (ms depuis
+		1970) ; 0 si inconnue. Au-delà du délai réglé, l'empreinte attend une
+		nouvelle saisie du mot de passe.
+	*/
+	var passwordAt: Long
+
+	/*
 		Note que l'activation a été proposée.
 	*/
 	fun markOffered()

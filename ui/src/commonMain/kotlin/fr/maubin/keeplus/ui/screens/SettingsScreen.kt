@@ -35,6 +35,7 @@ import fr.maubin.keeplus.generator.strengthOf
 import fr.maubin.keeplus.settings.kClipboardChoices
 import fr.maubin.keeplus.settings.kHiddenChoices
 import fr.maubin.keeplus.settings.kIdleChoices
+import fr.maubin.keeplus.settings.kPasswordChoices
 import fr.maubin.keeplus.ui.AppController
 import fr.maubin.keeplus.ui.components.FilterPill
 import fr.maubin.keeplus.ui.components.GhostButton
@@ -108,6 +109,13 @@ fun SettingsScreen(
 			var vReady by remember { mutableStateOf(inController.biometricReady) }			// empreinte active
 			SettingsSection("Empreinte") {
 				BasicText(if (vReady) "Active" else "Inactive", style = vType.body)
+				if (vReady)
+				{
+					BasicText("Redemander le mot de passe maître", style = vType.body)
+					Choices(kPasswordChoices, vSettings.passwordHours, { when (it) { 0 -> "Jamais"; 168 -> "1 semaine"; else -> "$it h" } }) {
+						inController.updateSettings(vSettings.copy(passwordHours = it))
+					}
+				}
 				if (vReady) GhostButton("Désactiver l'empreinte", { inController.disableBiometric(); inController.offerBiometricAgain(); vReady = false })
 				else TextLink("Proposer l'empreinte au prochain déverrouillage", { inController.offerBiometricAgain() })
 			}

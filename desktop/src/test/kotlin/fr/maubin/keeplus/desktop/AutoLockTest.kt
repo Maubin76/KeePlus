@@ -26,6 +26,7 @@ import org.junit.rules.TemporaryFolder
 	fAccept      : l'utilisateur accepte la demande d'empreinte
 	fInvalidated : clé invalidée (empreinte ajoutée)
 	fOffered     : activation déjà proposée
+	passwordAt   : dernier déverrouillage par mot de passe (ms)
 */
 private class FakeBiometric : BiometricUnlock
 {
@@ -33,6 +34,7 @@ private class FakeBiometric : BiometricUnlock
 	var fAccept      : Boolean = true
 	var fInvalidated : Boolean = false
 	var fOffered     : Boolean = false
+	override var passwordAt : Long = 0L
 
 	/*
 		Capteur toujours présent.
@@ -174,6 +176,33 @@ class AutoLockTest
 		assertTrue(vController.screen is AppScreen.Opened)
 		vController.setHidden(false)
 		assertNull(vController.activeVault())
+	}
+
+	/*
+		Fréquence du mot de passe maître avec l'empreinte : au-delà d'une
+		semaine (réglage par défaut) sans saisie du mot de passe, l'empreinte
+		n'est plus proposée ; une saisie la rend de nouveau disponible pour
+		une semaine ; « Jamais » la laisse toujours disponible.
+	*/
+	@Test
+	fun passwordFrequency() = runBlocking {
+		val vBiometric  = FakeBiometric().apply { fSecret = "un mot de passe solide"; fOffered = true }	// empreinte active
+		val vController = AppController(VaultStore(fFolder.root.resolve("coffre.kdbx")), { null }, vBiometric, fNow = { fTime })	// appli
+		vController.open(vController.create("Perso", "un mot de passe solide")!!)
+		vController.lock()
+		val vWeek = 7 * 24 * 3_600_000L																	// une semaine (ms)
+		fTime += vWeek
+		assertFalse(vController.biometricReady)
+		vController.open(vController.unlock("un mot de passe solide")!!)
+		assertEquals(fTime, vBiometric.passwordAt)
+		vController.lock()
+		fTime += vWeek - 1000
+		assertTrue(vController.biometricReady)
+		assertNotNull(vController.unlockWithBiometric())
+		fTime += 1000
+		assertFalse(vController.biometricReady)
+		vController.updateSettings(KeeSettings(passwordHours = 0))
+		assertTrue(vController.biometricReady)
 	}
 
 	/*

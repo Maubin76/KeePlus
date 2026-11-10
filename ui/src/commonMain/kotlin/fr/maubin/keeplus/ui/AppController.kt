@@ -171,9 +171,19 @@ class AppController(
 	private var fPending      : CharArray? = null											// mot de passe gardé le temps de proposer l'empreinte
 
 	/*
-		Vrai si l'empreinte est active : l'écran de déverrouillage la propose.
+		Vrai si l'empreinte est active et que le mot de passe maître a été
+		saisi assez récemment (réglage passwordHours) : l'écran de
+		déverrouillage la propose.
 	*/
-	val biometricReady: Boolean get() = fBiometric?.let { it.available && it.enabled } == true
+	val biometricReady: Boolean get() = fBiometric?.let { it.available && it.enabled && !passwordDue(it) } == true
+
+	/*
+		Vrai si le délai réglé depuis le dernier déverrouillage par le mot de
+		passe maître est écoulé (jamais avec le réglage « Jamais »).
+		inBiometric : empreinte
+	*/
+	private fun passwordDue(inBiometric: BiometricUnlock): Boolean =
+		settings.passwordHours > 0 && fNow() - inBiometric.passwordAt >= settings.passwordHours * 3_600_000L
 
 	/*
 		Vrai s'il faut proposer d'activer l'empreinte (juste après un
@@ -594,11 +604,14 @@ class AppController(
 
 	/*
 		Ouvre le coffre de l'appareil ; null en cas d'échec (message dans error).
+		Note la date du déverrouillage par mot de passe (fréquence du mot de
+		passe maître avec l'empreinte).
 		inPassword : mot de passe maître
 	*/
 	suspend fun unlock(inPassword: CharSequence): Vault?
 	{
 		val vVault = run { fStore.unlock(inPassword) } ?: return null					// coffre ouvert
+		fBiometric?.passwordAt = fNow()
 		val vOffer = fBiometric?.let { it.available && !it.enabled && !it.offered } == true	// proposer l'empreinte
 		if (vOffer)
 		{

@@ -27,6 +27,7 @@ private const val kPrefs      = "biometric"												// fichier des réglages 
 private const val kSecret     = "secret"													// mot de passe chiffré (base64)
 private const val kIv         = "iv"														// vecteur d'initialisation (base64)
 private const val kOffered    = "offered"												// activation déjà proposée
+private const val kPasswordAt = "password_at"											// dernier déverrouillage par mot de passe (ms)
 private const val kTransform  = "AES/GCM/NoPadding"										// chiffrement
 private const val kTagBits    = 128														// taille de l'étiquette GCM
 
@@ -59,6 +60,13 @@ class AndroidBiometric(private val fActivity: FragmentActivity) : BiometricUnloc
 	*/
 	override val offered: Boolean
 		get() = fPrefs.getBoolean(kOffered, false)
+
+	/*
+		Dernier déverrouillage par le mot de passe maître (ms) ; 0 si inconnu.
+	*/
+	override var passwordAt: Long
+		get() = fPrefs.getLong(kPasswordAt, 0L)
+		set(inValue) { fPrefs.edit().putLong(kPasswordAt, inValue).apply() }
 
 	/*
 		Note que l'activation a été proposée.
