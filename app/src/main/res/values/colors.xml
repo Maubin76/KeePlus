@@ -2,4 +2,6 @@
 <resources>
 	<!-- Gris du métal du logo (milieu du dégradé argent) : fond de la fenêtre au lancement. -->
 	<color name="metal">#FFD9D9DB</color>
+	<!-- Fond des écrans de travail : écran de l'auto-remplissage. -->
+	<color name="ground">#FF0B0B0C</color>
 </resources>

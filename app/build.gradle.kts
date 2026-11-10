@@ -80,8 +80,17 @@ dependencies {
 	implementation(libs.androidx.camera.camera2)											// appareil photo (scan du QR code)
 	implementation(libs.androidx.camera.lifecycle)
 	implementation(libs.androidx.camera.view)
+	implementation(libs.androidx.autofill)													// suggestions d'auto-remplissage dans le clavier
 	implementation(libs.androidx.work.runtime)												// synchronisation en tâche de fond
 	debugImplementation(libs.androidx.compose.ui.tooling)
 
 	testImplementation(libs.junit)
+}
+
+// Chaque build debug de KeePlus (Android Studio ou :app:installDebug) installe aussi
+// l'appli Démo Connexion sur les appareils branchés, pour essayer l'auto-remplissage.
+// Sans appareil, rien n'est installé et le build continue ; la CI ne construit que
+// la version release, sans la démo.
+tasks.matching { it.name == "assembleDebug" || it.name == "installDebug" }.configureEach {
+	finalizedBy(":demo:installOnDevices")
 }

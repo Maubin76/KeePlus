@@ -7,7 +7,14 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
@@ -102,6 +109,59 @@ fun KeeBackdrop(
 		inContent()
 	}
 }
+
+/*
+	Vrai à l'intérieur d'un panneau qui porte déjà la texture des écrans de
+	travail (voir keeTexture).
+*/
+val LocalTextured = staticCompositionLocalOf { false }
+
+/*
+	Texture des écrans de travail (coffre ouvert, réglages, appareils) : la
+	grille fine et le grain du décor des écrans clés, sans brume ni emblème,
+	posés sur le fond et sous le contenu. La grille est calée sur la fenêtre :
+	ses traits restent alignés d'un panneau à l'autre. Elle s'estompe vers
+	le bas, comme sur l'écran de déverrouillage.
+	À placer juste après le fond (background) du panneau. Sans effet dans
+	un panneau déjà texturé (LocalTextured) : la texture n'est jamais
+	dessinée deux fois.
+*/
+@Composable
+fun Modifier.keeTexture(): Modifier
+{
+	if (LocalTextured.current) return this
+	val vGrain  = remember { noiseTile() }													// grain, tiré une fois
+	var vOrigin by remember { mutableStateOf(Offset.Zero) }									// position du panneau dans la fenêtre
+	return this
+		.onGloballyPositioned { vOrigin = it.positionInWindow() }
+		.drawBehind {
+			val vStep = kGridStep.toPx()															// pas en pixels
+			val vLine = Brush.verticalGradient(0f to KeeColors.gridLine, 0.55f to KeeColors.gridLine, 0.9f to Color.Transparent)	// traits
+			var vX    = mod(-vOrigin.x, vStep)														// premier trait vertical, calé sur la fenêtre
+			while (vX < size.width)
+			{
+				drawLine(vLine, Offset(vX, 0f), Offset(vX, size.height), 1f)
+				vX += vStep
+			}
+			var vY    = mod(vStep / 2f - vOrigin.y, vStep)											// premier trait horizontal
+			while (vY < size.height)
+			{
+				drawLine(vLine, Offset(0f, vY), Offset(size.width, vY), 1f)
+				vY += vStep
+			}
+			drawRect(ShaderBrush(ImageShader(vGrain, TileMode.Repeated, TileMode.Repeated)), alpha = kGrain)
+		}
+}
+
+/*
+	Reste positif d'une division (décalage de la grille).
+	inValue : valeur
+	inStep  : pas
+*/
+private fun mod(
+	inValue : Float,
+	inStep  : Float
+): Float = ((inValue % inStep) + inStep) % inStep
 
 /*
 	Anneau lumineux d'une vague partie du centre.

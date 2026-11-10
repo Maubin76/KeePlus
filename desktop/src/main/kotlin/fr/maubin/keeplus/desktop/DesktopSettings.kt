@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.dp
 import fr.maubin.keeplus.ui.components.FilterPill
 import fr.maubin.keeplus.ui.components.GhostButton
 import fr.maubin.keeplus.ui.screens.ErrorLine
+import fr.maubin.keeplus.ui.screens.SettingsSection
 import fr.maubin.keeplus.ui.theme.keeType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -35,15 +36,13 @@ fun DesktopSettings(inBackups: File?)
 	var vOn     by remember { mutableStateOf(false) }										// démarrage avec Windows
 	var vError  by remember { mutableStateOf<String?>(null) }								// échec
 	LaunchedEffect(Unit) { vOn = withContext(Dispatchers.IO) { WindowsStartup.isOn() } }
-	Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-		BasicText("Démarrage", style = vType.bodySmall)
+	SettingsSection("Démarrage") {
 		if (WindowsStartup.exe == null)
 		{
-			BasicText("Le démarrage avec Windows est proposé une fois KeePlus installé.", style = vType.bodySmall)
+			BasicText("Disponible une fois KeePlus installé.", style = vType.body)
 		}
 		else
 		{
-			BasicText("Lancer KeePlus avec Windows, dans la zone de notification : le téléphone peut se synchroniser sans ouvrir la fenêtre.", style = vType.body)
 			Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
 				for (vChoice in listOf(true, false))
 				{
@@ -60,8 +59,7 @@ fun DesktopSettings(inBackups: File?)
 	}
 	if (inBackups != null)
 	{
-		Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-			BasicText("Dossier des sauvegardes", style = vType.bodySmall)
+		SettingsSection("Dossier des sauvegardes") {
 			BasicText(inBackups.absolutePath, style = vType.body)
 			GhostButton("Ouvrir le dossier", {
 				runCatching { inBackups.mkdirs(); Desktop.getDesktop().open(inBackups) }

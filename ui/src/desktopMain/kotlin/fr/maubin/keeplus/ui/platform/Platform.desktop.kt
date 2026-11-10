@@ -5,6 +5,11 @@ import androidx.compose.runtime.State
 import androidx.compose.ui.geometry.Offset
 
 /*
+	Boutons des réglages à leur taille normale sur PC.
+*/
+actual fun settingsButtonScale(): Float = 1f
+
+/*
 	Animations toujours actives sur PC.
 */
 @Composable

@@ -22,6 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
+import fr.maubin.keeplus.autofill.VaultSession
 import fr.maubin.keeplus.settings.SettingsStore
 import fr.maubin.keeplus.ui.AppController
 import fr.maubin.keeplus.ui.KeePlusApp
@@ -39,7 +40,8 @@ import java.io.File
 	aperçu dans les applications récentes. Le coffre est dans le stockage
 	privé de l'appli, inaccessible aux autres applis.
 	Verrouillage : écran éteint (aussitôt), appli en arrière-plan (au-delà du
-	délai de grâce, voir AppController).
+	délai de grâce, voir AppController). Le coffre ouvert est prêté à
+	l'auto-remplissage dans les mêmes délais (voir VaultSession).
 	fPending    : choix de fichier en attente du sélecteur
 	fPicker     : sélecteur de documents du système
 	fController : état de l'appli
@@ -88,6 +90,7 @@ class MainActivity : FragmentActivity(), VaultFiles
 			fSettings  = SettingsStore(File(filesDir, "reglages.json")),
 			fUpdater   = AndroidUpdateInstaller(applicationContext)
 		)
+		VaultSession.attach(fController)
 		registerReceiver(fScreenOff, IntentFilter(Intent.ACTION_SCREEN_OFF))
 		scheduleSync(this)
 		lifecycleScope.launch {
@@ -142,10 +145,12 @@ class MainActivity : FragmentActivity(), VaultFiles
 	}
 
 	/*
-		Fin de l'activité : plus d'écoute de l'écran.
+		Fin de l'activité : plus d'écoute de l'écran, coffre plus prêté à
+		l'auto-remplissage.
 	*/
 	override fun onDestroy()
 	{
+		VaultSession.detach(fController)
 		unregisterReceiver(fScreenOff)
 		super.onDestroy()
 	}

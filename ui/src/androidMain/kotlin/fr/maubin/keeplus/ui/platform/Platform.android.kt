@@ -18,6 +18,11 @@ private const val kMaxAngle = 0.35f													// inclinaison donnant l'amplitu
 private const val kSmooth   = 0.12f													// lissage (part de la nouvelle mesure)
 
 /*
+	Boutons des réglages réduits de 20 % sur le téléphone.
+*/
+actual fun settingsButtonScale(): Float = 0.8f
+
+/*
 	Animations du système : réglage « échelle de durée des animations ».
 */
 @Composable

@@ -7,4 +7,12 @@
 		<item name="android:windowSplashScreenBackground">@color/metal</item>
 		<item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_vide</item>
 	</style>
+
+	<!-- Écran de l'auto-remplissage : fenêtre transparente (un remplissage immédiat ne montre rien),
+	     Compose dessine le fond sombre quand il faut déverrouiller ou choisir. -->
+	<style name="Theme.KeePlus.Autofill" parent="android:Theme.Material.NoActionBar">
+		<item name="android:windowIsTranslucent">true</item>
+		<item name="android:windowBackground">@android:color/transparent</item>
+		<item name="android:windowAnimationStyle">@null</item>
+	</style>
 </resources>

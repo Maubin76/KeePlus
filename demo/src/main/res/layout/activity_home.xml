@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Accueil du compte connecté. La racine réserve la place des barres système (fitsSystemWindows
+     remplace sa marge) ; la marge du contenu est portée par le bloc intérieur. -->
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+	android:layout_width="match_parent"
+	android:layout_height="match_parent"
+	android:fitsSystemWindows="true">
+
+	<LinearLayout
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:orientation="vertical"
+		android:padding="24dp">
+
+		<TextView
+			android:id="@+id/welcome"
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:layout_marginBottom="24dp"
+			android:textAppearance="?android:attr/textAppearanceLarge" />
+
+		<Button
+			android:id="@+id/change"
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:text="@string/action_change" />
+
+		<Button
+			android:id="@+id/logout"
+			style="?android:attr/borderlessButtonStyle"
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:text="@string/action_logout" />
+	</LinearLayout>
+</ScrollView>

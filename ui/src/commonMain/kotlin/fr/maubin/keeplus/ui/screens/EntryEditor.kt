@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import fr.maubin.keeplus.generator.estimateBits
 import fr.maubin.keeplus.ui.AppController
+import fr.maubin.keeplus.ui.components.keeTexture
 import fr.maubin.keeplus.ui.components.FilterPill
 import fr.maubin.keeplus.ui.components.GeneratorPanel
 import fr.maubin.keeplus.ui.components.GhostButton
@@ -121,6 +122,7 @@ fun EntryEditor(
 		Modifier
 			.fillMaxSize()
 			.background(mistTop())
+			.keeTexture()
 			.safeDrawingPadding()
 			.imePadding()
 	) {

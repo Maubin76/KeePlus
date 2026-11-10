@@ -79,6 +79,15 @@ fun currentPhoneNetwork(inContext: Context): PhoneNetwork
 }
 
 /*
+	Accès au coffre du téléphone (stockage privé) et à ses sauvegardes. Un
+	accès distinct retient son propre dernier coffre lu ou écrit : celui de
+	l'auto-remplissage ne se confond pas avec celui de l'appli.
+	inContext : contexte
+*/
+fun phoneStore(inContext: Context): VaultStore =
+	VaultStore(File(inContext.filesDir, "coffre.kdbx"), VaultBackups(File(inContext.filesDir, "sauvegardes"), 3))
+
+/*
 	Nom du téléphone : celui donné dans les réglages d'Android, sinon le modèle.
 	inContext : contexte
 */
@@ -241,10 +250,10 @@ class AndroidSync private constructor(
 				{
 					!vPeers.enabled                                -> PhoneStatus.Disabled
 					vPeers.pcs.isEmpty()                           -> PhoneStatus.Unpaired
-					!vNet.onWifi                                   -> PhoneStatus.Away("Pas de Wi-Fi : synchronisation au retour à la maison.")
-					!vNet.unmetered                                -> PhoneStatus.Away("Wi-Fi facturé à l'usage : pas de synchronisation.")
+					!vNet.onWifi                                   -> PhoneStatus.Away("Pas de Wi-Fi.")
+					!vNet.unmetered                                -> PhoneStatus.Away("Wi-Fi facturé à l'usage.")
 					vNet.wifi == null                              -> PhoneStatus.Away(if (!vNet.permission) "Autorisez la localisation pour reconnaître le Wi-Fi de la maison." else "Nom du Wi-Fi illisible : activez la localisation du téléphone.")
-					!isHomeNetwork(listOf(vNet.wifi), vPeers.home) -> PhoneStatus.Away("Hors du réseau de la maison (Wi-Fi « ${vNet.wifi.value} ») : synchronisation au retour.")
+					!isHomeNetwork(listOf(vNet.wifi), vPeers.home) -> PhoneStatus.Away("Hors du réseau de la maison (« ${vNet.wifi.value} »).")
 					else                                           ->
 					{
 						fStatus.value = PhoneStatus.Working
@@ -298,6 +307,16 @@ class AndroidSync private constructor(
 	}
 
 	/*
+		Le coffre a été enregistré hors de l'appli (auto-remplissage) : l'appli
+		le relit si elle l'a ouvert, et la synchronisation suit.
+	*/
+	fun savedElsewhere()
+	{
+		fChanged.tryEmit(Unit)
+		changed()
+	}
+
+	/*
 		Relit les appareils enregistrés.
 	*/
 	private fun refreshPeers()
@@ -314,7 +333,7 @@ class AndroidSync private constructor(
 			!fEngine.peers().enabled      -> PhoneStatus.Disabled
 			fEngine.peers().pcs.isEmpty() -> PhoneStatus.Unpaired
 			fEngine.pending().isNotEmpty() -> PhoneStatus.Pending
-			else                          -> PhoneStatus.Away("En attente de la première synchronisation.")
+			else                          -> PhoneStatus.Away("Pas encore synchronisé.")
 		}
 
 	companion object
@@ -329,7 +348,7 @@ class AndroidSync private constructor(
 			fInstance ?: synchronized(this) {
 				fInstance ?: run {
 					val vApp   = inContext.applicationContext											// contexte de l'application
-					val vStore = VaultStore(File(vApp.filesDir, "coffre.kdbx"), VaultBackups(File(vApp.filesDir, "sauvegardes"), 3))	// coffre du téléphone et ses sauvegardes
+					val vStore = phoneStore(vApp)														// coffre du téléphone et ses sauvegardes
 					AndroidSync(vApp, vStore, PhoneSync(File(vApp.filesDir, "synchro"), vStore, phoneName(vApp), BuildConfig.VERSION_NAME))
 				}.also { fInstance = it }
 			}

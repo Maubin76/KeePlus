@@ -86,10 +86,10 @@ fun DevicesPanel(
 		verticalArrangement = Arrangement.spacedBy(18.dp)
 	) {
 		Row(verticalAlignment = Alignment.CenterVertically) {
-			BasicText("Appareils", Modifier.weight(1f), style = vType.headline)
-			IconAction(LineIcons.Close, "Fermer", inOnClose, inTint = KeeColors.text)
+			IconAction(LineIcons.Back, "Retour", inOnClose, inTint = KeeColors.text)
+			BasicText("Appareils", Modifier.weight(1f).padding(start = 4.dp), style = vType.headline)
 		}
-		BasicText(statusText(vState.running, vState.onHome, vState.phones.isNotEmpty(), vState.networks), style = vType.bodySmall)
+		statusText(vState.running, vState.onHome, vState.phones.isNotEmpty(), vState.networks)?.let { BasicText(it, style = vType.bodySmall) }
 		ErrorLine(vState.error)
 
 		Section("Téléphones") {
@@ -116,8 +116,7 @@ fun DevicesPanel(
 				) {
 					QrCode(vOffer.encode(), 200.dp, "QR code d'appairage")
 					Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-						BasicText("Sur le téléphone, ouvrez KeePlus, puis Appareils › Appairer un PC, et visez ce QR code.", style = vType.body)
-						BasicText("Les deux appareils doivent être sur le Wi-Fi de la maison.", style = vType.bodySmall)
+						BasicText("Sur le téléphone : Appareils › Appairer un PC.", style = vType.body)
 						val vLeft = ((vOffer.expires - vNow) / 1000).coerceAtLeast(0)							// secondes restantes
 						BasicText("Valable encore ${vLeft / 60} min ${(vLeft % 60).toString().padStart(2, '0')} s", style = vType.bodySmall.copy(color = KeeColors.textFaint))
 						GhostButton("Annuler", { vScope.launch(Dispatchers.IO) { inSync.cancelPairing() } })
@@ -132,7 +131,7 @@ fun DevicesPanel(
 		}
 
 		Section("Réseau de la maison") {
-			BasicText("La synchronisation n'a lieu que sur ces réseaux : le PC n'écoute pas ailleurs.", style = vType.bodySmall)
+			if (vState.home.isEmpty() && vState.networks.isEmpty()) BasicText("Aucun réseau.", style = vType.bodySmall.copy(color = KeeColors.textFaint))
 			FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
 				for (vNetwork in vState.home)
 				{
@@ -144,11 +143,6 @@ fun DevicesPanel(
 				}
 			}
 		}
-
-		BasicText(
-			"Seul le fichier chiffré du coffre circule, sur le réseau local, dans un canal lui-même chiffré par une clé propre à chaque téléphone. Rien ne passe par internet.",
-			style = vType.bodySmall.copy(color = KeeColors.textFaint)
-		)
 	}
 	vRemove?.let { vPhone ->
 		ConfirmDialog(
@@ -162,7 +156,7 @@ fun DevicesPanel(
 }
 
 /*
-	État de l'écoute, en clair.
+	État de l'écoute, en clair ; null tant qu'aucun téléphone n'est appairé (la liste vide le dit).
 	inRunning  : serveur à l'écoute
 	inOnHome   : PC sur le réseau de la maison
 	inPaired   : au moins un téléphone appairé
@@ -173,13 +167,13 @@ private fun statusText(
 	inOnHome   : Boolean,
 	inPaired   : Boolean,
 	inNetworks : List<NetworkId>
-): String =
+): String? =
 	when
 	{
-		!inPaired                 -> "Appairez un téléphone pour synchroniser le coffre sur le Wi-Fi de la maison."
-		inRunning && inOnHome     -> "À l'écoute sur le réseau de la maison : le téléphone se synchronise quand il est sur le même Wi-Fi."
-		inNetworks.isEmpty()      -> "Réseau du PC illisible : la synchronisation attend."
-		else                      -> "Ce PC n'est pas sur un réseau de la maison : la synchronisation attend. Ajoutez le réseau actuel ci-dessous s'il est bien chez vous."
+		!inPaired                 -> null
+		inRunning && inOnHome     -> "À l'écoute sur le réseau de la maison."
+		inNetworks.isEmpty()      -> "Réseau du PC illisible."
+		else                      -> "Hors du réseau de la maison."
 	}
 
 /*

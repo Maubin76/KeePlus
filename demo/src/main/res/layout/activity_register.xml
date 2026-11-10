@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Création d'un compte : les deux mots de passe sont marqués « nouveau mot de passe » (newPassword). -->
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+	android:layout_width="match_parent"
+	android:layout_height="match_parent"
+	android:fitsSystemWindows="true">
+
+	<LinearLayout
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:orientation="vertical"
+		android:padding="24dp">
+
+		<TextView
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:layout_marginBottom="16dp"
+			android:text="@string/register_title"
+			android:textAppearance="?android:attr/textAppearanceLarge" />
+
+		<EditText
+			android:id="@+id/user"
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:autofillHints="username"
+			android:hint="@string/field_user"
+			android:inputType="textEmailAddress" />
+
+		<EditText
+			android:id="@+id/password"
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:autofillHints="newPassword"
+			android:hint="@string/field_password"
+			android:inputType="textPassword" />
+
+		<EditText
+			android:id="@+id/confirm"
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:autofillHints="newPassword"
+			android:hint="@string/field_confirm"
+			android:inputType="textPassword" />
+
+		<TextView
+			android:id="@+id/error"
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:layout_marginTop="8dp"
+			android:textColor="#C62828" />
+
+		<Button
+			android:id="@+id/create"
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:layout_marginTop="8dp"
+			android:text="@string/action_create" />
+	</LinearLayout>
+</ScrollView>

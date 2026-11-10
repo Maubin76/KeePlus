@@ -107,7 +107,7 @@ fun GeneratorPanel(
 	inOnChange : nouvelle valeur
 */
 @Composable
-private fun Stepper(
+fun Stepper(
 	inLabel    : String,
 	inValue    : Int,
 	inRange    : IntRange,

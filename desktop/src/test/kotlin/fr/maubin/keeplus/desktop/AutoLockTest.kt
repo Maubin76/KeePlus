@@ -19,6 +19,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import java.util.UUID
 
 /*
 	Empreinte simulée : garde le mot de passe en clair (test seulement).
@@ -26,6 +27,7 @@ import org.junit.rules.TemporaryFolder
 	fAccept      : l'utilisateur accepte la demande d'empreinte
 	fInvalidated : clé invalidée (empreinte ajoutée)
 	fOffered     : activation déjà proposée
+	passwordAt   : dernier déverrouillage par mot de passe (ms)
 */
 private class FakeBiometric : BiometricUnlock
 {
@@ -33,6 +35,7 @@ private class FakeBiometric : BiometricUnlock
 	var fAccept      : Boolean = true
 	var fInvalidated : Boolean = false
 	var fOffered     : Boolean = false
+	override var passwordAt : Long = 0L
 
 	/*
 		Capteur toujours présent.
@@ -148,6 +151,78 @@ class AutoLockTest
 		fTime += kHiddenMillis
 		vController.setHidden(false)
 		assertEquals(AppScreen.Locked, vController.screen)
+	}
+
+	/*
+		Auto-remplissage : le coffre ouvert est prêté tant que les délais de
+		verrouillage ne sont pas dépassés, même avant le verrouillage
+		effectif ; jamais une fois verrouillé. Une modification venue de
+		l'auto-remplissage est affichée et enregistrée.
+	*/
+	@Test
+	fun activeVaultForAutofill() = runBlocking {
+		val vController = opened()																// coffre ouvert
+		assertNotNull(vController.activeVault())
+		vController.edit { it.addGroup("Applis") }
+		assertEquals(listOf("Applis"), vController.activeVault()!!.groups().map { it.name })
+		vController.lock()
+		assertNull(vController.unlock("faux"))
+		vController.open(vController.unlock("un mot de passe solide")!!)
+		assertEquals(listOf("Applis"), vController.activeVault()!!.groups().map { it.name })
+		vController.setHidden(true)
+		fTime += kHiddenMillis - 5000
+		assertNotNull(vController.activeVault())
+		fTime += 5000
+		assertNull(vController.activeVault())
+		assertTrue(vController.screen is AppScreen.Opened)
+		vController.setHidden(false)
+		assertNull(vController.activeVault())
+	}
+
+	/*
+		Fréquence du mot de passe maître avec l'empreinte : au-delà d'une
+		semaine (réglage par défaut) sans saisie du mot de passe, l'empreinte
+		n'est plus proposée ; une saisie la rend de nouveau disponible pour
+		une semaine ; « Jamais » la laisse toujours disponible.
+	*/
+	@Test
+	fun passwordFrequency() = runBlocking {
+		val vBiometric  = FakeBiometric().apply { fSecret = "un mot de passe solide"; fOffered = true }	// empreinte active
+		val vController = AppController(VaultStore(fFolder.root.resolve("coffre.kdbx")), { null }, vBiometric, fNow = { fTime })	// appli
+		vController.open(vController.create("Perso", "un mot de passe solide")!!)
+		vController.lock()
+		val vWeek = 7 * 24 * 3_600_000L																	// une semaine (ms)
+		fTime += vWeek
+		assertFalse(vController.biometricReady)
+		vController.open(vController.unlock("un mot de passe solide")!!)
+		assertEquals(fTime, vBiometric.passwordAt)
+		vController.lock()
+		fTime += vWeek - 1000
+		assertTrue(vController.biometricReady)
+		assertNotNull(vController.unlockWithBiometric())
+		fTime += 1000
+		assertFalse(vController.biometricReady)
+		vController.updateSettings(KeeSettings(passwordHours = 0))
+		assertTrue(vController.biometricReady)
+	}
+
+	/*
+		Choisir une entrée, en créer ou en modifier une ferme les réglages et
+		les appareils (sur PC, ils occupent la place de la fiche).
+	*/
+	@Test
+	fun entryClosesPages()
+	{
+		val vController = opened()																// coffre ouvert
+		val vId         = UUID.randomUUID()													// entrée
+		vController.showSettings = true
+		vController.select(vId)
+		assertFalse(vController.showSettings)
+		assertEquals(vId, vController.selected)
+		vController.showDevices = true
+		vController.startNew()
+		assertFalse(vController.showDevices)
+		assertNotNull(vController.editing)
 	}
 
 	/*

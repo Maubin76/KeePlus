@@ -115,6 +115,8 @@ au déverrouillage.
 
 ## Sécurité
 
+Le détail, expliqué sans prérequis et en schémas : [**la cryptographie de KeePlus**](doc/CRYPTOGRAPHIE.md).
+
 | Sujet | Ce que fait KeePlus |
 |---|---|
 | **Chiffrement du coffre** | KDBX 4 : clé dérivée par Argon2id (64 Mio), contenu chiffré en AES-256 |
@@ -155,13 +157,15 @@ au téléphone et au PC.
 bash ci/polices.sh                    # polices Satoshi (non versionnées, voir plus bas)
 ./gradlew :core:test :desktop:test    # tests
 ./gradlew :desktop:run                # appli PC
-./gradlew :app:installDebug           # appli Android sur le téléphone branché
+./gradlew :app:installDebug           # appli Android sur le téléphone branché (+ appli Démo Connexion)
 ./gradlew :desktop:packageZip         # dossier portable Windows (JDK avec jpackage)
 ```
 
 - **CI** : à chaque push sur `main`, tous les tests, puis APK signé, appli PC portable et
   release GitHub, avec un numéro de version augmenté automatiquement.
 - **Captures de ce README** : `KEEPLUS_CAPTURES=1 ./gradlew :desktop:test --tests "*ReadmeScreenshotsTest*"`.
+- **Auto-remplissage** : chaque build debug installe aussi `demo/`, « Démo Connexion », une appli tierce
+  (création de compte, connexion, changement de mot de passe) pour essayer KeePlus.
 - **Logo** : dessiné dans `ui/.../theme/Logo.kt` ; `LogoAssetsTest` régénère les icônes.
 - **Direction artistique** : [`DESIGN.md`](DESIGN.md) ; intentions du produit : [`PRODUCT.md`](PRODUCT.md).
 
