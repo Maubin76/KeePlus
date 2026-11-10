@@ -272,21 +272,45 @@ class AppController(
 	}
 
 	/*
-		Commence une nouvelle entrée, dans le groupe filtré s'il y en a un.
+		Affiche la fiche d'une entrée : les réglages ou les appareils ouverts
+		se ferment (sur PC, ils occupent la place de la fiche).
+		inId : identifiant de l'entrée
+	*/
+	fun select(inId: UUID)
+	{
+		closePages()
+		selected = inId
+	}
+
+	/*
+		Commence une nouvelle entrée, dans le groupe filtré s'il y en a un ;
+		les réglages ou les appareils ouverts se ferment.
 	*/
 	fun startNew()
 	{
 		val vGroup = (filter as? ListFilter.Group)?.id											// groupe filtré
+		closePages()
 		editing = EntryDraft(id = UUID.randomUUID(), groupId = vGroup)
 	}
 
 	/*
-		Commence la modification d'une entrée.
+		Commence la modification d'une entrée ; les réglages ou les appareils
+		ouverts se ferment.
 		inId : identifiant de l'entrée
 	*/
 	fun startEdit(inId: UUID)
 	{
+		closePages()
 		editing = openedVault()?.draft(inId)
+	}
+
+	/*
+		Ferme les réglages et les appareils.
+	*/
+	private fun closePages()
+	{
+		showSettings = false
+		showDevices  = false
 	}
 
 	/*

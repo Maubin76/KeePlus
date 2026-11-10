@@ -1,6 +1,8 @@
 package fr.maubin.keeplus.ui.screens
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -37,6 +39,7 @@ import androidx.compose.foundation.text.input.clearText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -65,6 +68,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import fr.maubin.keeplus.ui.AppController
 import fr.maubin.keeplus.ui.ListFilter
+import fr.maubin.keeplus.ui.components.LocalTextured
+import fr.maubin.keeplus.ui.components.keeTexture
 import fr.maubin.keeplus.ui.components.FilterPill
 import fr.maubin.keeplus.ui.components.IconAction
 import fr.maubin.keeplus.ui.components.Monogram
@@ -214,11 +219,44 @@ fun VaultScreen(
 		val vSettingsPage: @Composable () -> Unit = { SettingsScreen(inController, inDemo, inSettings) { inController.showSettings = false } }	// page des réglages
 		val vDevices = if (inController.showSettings) vSettingsPage else inDevices?.takeIf { inController.showDevices && !inDemo }	// page affichée à la place du contenu
 		if (maxWidth >= kWideMin) WideVault(inController, inVault, inDemo, vItems, vCopy, vActions, vSearch, vDevices, inDevices != null && !inDemo)
-		else if (vDevices != null) vDevices()
-		else CompactVault(inController, inVault, inDemo, vItems, vCopy, vActions, vSearch, inDevices != null && !inDemo)
+		else
+		{
+			val vPage = when
+			{
+				inController.showSettings -> Page.Settings
+				vDevices != null          -> Page.Devices
+				else                      -> Page.Vault
+			}																					// page affichée
+			AnimatedContent(vPage, transitionSpec = { pageTransition(targetState != Page.Vault) }, label = "page") { vShown ->
+				when (vShown)
+				{
+					Page.Settings -> vSettingsPage()
+					Page.Devices  -> inDevices?.invoke()
+					Page.Vault    -> CompactVault(inController, inVault, inDemo, vItems, vCopy, vActions, vSearch, inDevices != null && !inDemo)
+				}
+			}
+		}
 		Notice(inController.saveError ?: vNotice, Modifier.align(Alignment.BottomCenter).safeDrawingPadding().padding(bottom = 24.dp))
 	}
 }
+
+/*
+	Page affichée sur le téléphone : le coffre, ou une page ouverte par-dessus.
+*/
+private enum class Page
+{
+	Vault, Settings, Devices
+}
+
+/*
+	Passage d'une page à l'autre sur le téléphone : la page ouverte arrive de
+	la droite en fondu ; au retour, elle repart vers la droite et la page
+	précédente réapparaît en fondu.
+	inForward : ouverture (vrai) ou retour (faux)
+*/
+private fun pageTransition(inForward: Boolean): ContentTransform =
+	if (inForward) (slideInHorizontally(tween(280)) { it / 4 } + fadeIn(tween(280))) togetherWith fadeOut(tween(180))
+	else fadeIn(tween(280)) togetherWith (slideOutHorizontally(tween(280)) { it / 4 } + fadeOut(tween(220)))
 
 /*
 	Volet affiché sur le téléphone.
@@ -270,10 +308,7 @@ private fun CompactVault(
 	AnimatedContent(
 		vPane,
 		contentKey     = { it::class },
-		transitionSpec = {
-			if (targetState != Pane.List) (slideInHorizontally { it / 4 } + fadeIn()) togetherWith fadeOut()
-			else fadeIn() togetherWith (slideOutHorizontally { it / 4 } + fadeOut())
-		},
+		transitionSpec = { pageTransition(targetState != Pane.List) },
 		label = "volet"
 	) { vShown ->
 		when (vShown)
@@ -281,7 +316,7 @@ private fun CompactVault(
 			is Pane.Edit   -> EntryEditor(inController, inVault, vShown.draft)
 			is Pane.Detail -> EntryDetail(inVault, vShown.id, inCopy, { inController.selected = null }, inActions)
 			Pane.List      -> Box(Modifier.fillMaxSize()) {
-				Column(Modifier.fillMaxSize().background(mistTop()).safeDrawingPadding()) {
+				Column(Modifier.fillMaxSize().background(mistTop()).keeTexture().safeDrawingPadding()) {
 					Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
 						KeeLogo(inSize = 26.dp)
 						Spacer(Modifier.width(10.dp))
@@ -331,6 +366,7 @@ private fun WideVault(
 				.width(kListWidth)
 				.fillMaxHeight()
 				.background(KeeColors.ground)
+				.keeTexture()
 		) {
 			Row(Modifier.padding(start = 16.dp, end = 12.dp, top = 20.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
 				SearchField(inController.query, Modifier.weight(1f).focusRequester(inSearch))
@@ -340,15 +376,17 @@ private fun WideVault(
 			EntryList(inVault, inItems, inController.selected, inController, inCopy, emptyText(inController, inVault), PaddingValues(8.dp))
 		}
 		Box(Modifier.width(1.dp).fillMaxHeight().background(KeeColors.rule))
-		Box(Modifier.weight(1f).fillMaxHeight().background(mistTop())) {
+		Box(Modifier.weight(1f).fillMaxHeight().background(mistTop()).keeTexture()) {
 			val vEditing  = inController.editing														// entrée en édition
 			val vSelected = inController.selected?.takeIf { inVault.draft(it) != null }		// entrée affichée
-			when
-			{
-				inDevices != null -> inDevices()
-				vEditing != null  -> key(vEditing.id) { EntryEditor(inController, inVault, vEditing) }
-				vSelected != null -> EntryDetail(inVault, vSelected, inCopy, null, inActions)
-				else              -> BasicText("Choisissez une entrée.", Modifier.align(Alignment.Center), style = keeType().bodySmall)
+			CompositionLocalProvider(LocalTextured provides true) {
+				when
+				{
+					inDevices != null -> inDevices()
+					vEditing != null  -> key(vEditing.id) { EntryEditor(inController, inVault, vEditing) }
+					vSelected != null -> EntryDetail(inVault, vSelected, inCopy, null, inActions)
+					else              -> BasicText("Choisissez une entrée.", Modifier.align(Alignment.Center), style = keeType().bodySmall)
+				}
 			}
 		}
 	}
@@ -415,6 +453,7 @@ private fun GroupColumn(
 			.width(kGroupWidth)
 			.fillMaxHeight()
 			.background(KeeColors.void)
+			.keeTexture()
 			.padding(horizontal = 12.dp, vertical = 20.dp)
 	) {
 		Row(Modifier.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -540,7 +579,7 @@ private fun EntryList(
 					.fillMaxWidth()
 					.clip(RoundedCornerShape(16.dp))
 					.background(if (vItem.id == inSelected) KeeColors.surfaceHigh else Color.Transparent)
-					.clickable { inController.selected = vItem.id }
+					.clickable { inController.select(vItem.id) }
 					.padding(start = 12.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
 				verticalAlignment = Alignment.CenterVertically
 			) {

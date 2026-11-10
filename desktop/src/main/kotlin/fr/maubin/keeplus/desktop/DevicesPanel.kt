@@ -86,8 +86,8 @@ fun DevicesPanel(
 		verticalArrangement = Arrangement.spacedBy(18.dp)
 	) {
 		Row(verticalAlignment = Alignment.CenterVertically) {
-			BasicText("Appareils", Modifier.weight(1f), style = vType.headline)
-			IconAction(LineIcons.Close, "Fermer", inOnClose, inTint = KeeColors.text)
+			IconAction(LineIcons.Back, "Retour", inOnClose, inTint = KeeColors.text)
+			BasicText("Appareils", Modifier.weight(1f).padding(start = 4.dp), style = vType.headline)
 		}
 		statusText(vState.running, vState.onHome, vState.phones.isNotEmpty(), vState.networks)?.let { BasicText(it, style = vType.bodySmall) }
 		ErrorLine(vState.error)

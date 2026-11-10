@@ -37,7 +37,8 @@ private val kRequestCodes         = AtomicInteger(1)										// codes des deman
 	- inscription : « Inscription » (carte qui propose identifiant et mot de passe) ;
 	- changement de mot de passe : « Changer » (carte qui propose le nouveau) ;
 	- coffre verrouillé : « Déverrouiller » (empreinte, puis choix) ;
-	- coffre ouvert : les entrées de cette appli ou de ce site, puis
+	- coffre ouvert : les entrées de cette appli ou de ce site (l'identifiant
+	  en avant quand plusieurs portent le même titre), puis
 	  « Chercher dans KeePlus ».
 	Le bouclier de KeePlus accompagne chaque suggestion.
 	Aucune valeur ne quitte KeePlus avant l'appui : chaque suggestion passe
@@ -103,8 +104,11 @@ class KeeAutofillService : AutofillService()
 		else
 		{
 			val vMatches = vVault.autofillMatches(vRequest.target).take(kMaxSuggestions)			// entrées de cette cible
+			val vShared  = sharedTitles(vMatches)													// titres portés par plusieurs comptes
 			vMatches.forEachIndexed { vIndex, vItem ->
-				vResponse.addDataset(suggestion(vRequest, vItem, vItem.title.ifBlank { "Sans titre" }, vItem.userName, vSpecs.getOrNull(vIndex)))
+				val vUser  = vItem.title in vShared && vItem.userName.isNotBlank()					// identifiant en avant
+				val vTitle = vItem.title.ifBlank { "Sans titre" }									// titre
+				vResponse.addDataset(suggestion(vRequest, vItem, if (vUser) vItem.userName else vTitle, if (vUser) vTitle else vItem.userName, vSpecs.getOrNull(vIndex)))
 			}
 			vResponse.addDataset(suggestion(vRequest, null, "Chercher", "dans KeePlus", vSpecs.getOrNull(vMatches.size)))
 		}

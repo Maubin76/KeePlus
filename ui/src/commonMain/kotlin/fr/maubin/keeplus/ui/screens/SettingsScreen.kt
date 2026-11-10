@@ -1,6 +1,9 @@
 package fr.maubin.keeplus.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -18,6 +21,7 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -37,8 +41,10 @@ import fr.maubin.keeplus.settings.kHiddenChoices
 import fr.maubin.keeplus.settings.kIdleChoices
 import fr.maubin.keeplus.settings.kPasswordChoices
 import fr.maubin.keeplus.ui.AppController
+import fr.maubin.keeplus.ui.components.keeTexture
 import fr.maubin.keeplus.ui.components.FilterPill
 import fr.maubin.keeplus.ui.components.GhostButton
+import fr.maubin.keeplus.ui.components.LocalButtonScale
 import fr.maubin.keeplus.ui.components.IconAction
 import fr.maubin.keeplus.ui.components.OneLine
 import fr.maubin.keeplus.ui.components.SecretField
@@ -46,6 +52,7 @@ import fr.maubin.keeplus.ui.components.SilverButton
 import fr.maubin.keeplus.ui.components.StrengthMeter
 import fr.maubin.keeplus.ui.components.TextLink
 import fr.maubin.keeplus.ui.icons.LineIcons
+import fr.maubin.keeplus.ui.platform.settingsButtonScale
 import fr.maubin.keeplus.ui.theme.KeeColors
 import fr.maubin.keeplus.ui.theme.keeType
 import fr.maubin.keeplus.vault.VaultBackup
@@ -76,88 +83,95 @@ fun SettingsScreen(
 	val vSettings = inController.settings													// réglages
 	var vRestore  by remember { mutableStateOf<VaultBackup?>(null) }						// sauvegarde à restaurer
 	val vScope    = rememberCoroutineScope()													// restauration, mot de passe
-	Column(
-		Modifier
-			.fillMaxSize()
-			.background(mistTop())
-			.safeDrawingPadding()
-			.imePadding()
-			.verticalScroll(rememberScrollState())
-			.padding(horizontal = 20.dp, vertical = 12.dp)
-			.widthIn(max = 640.dp),
-		verticalArrangement = Arrangement.spacedBy(22.dp)
-	) {
-		Row(verticalAlignment = Alignment.CenterVertically) {
-			BasicText("Réglages", Modifier.weight(1f).padding(start = 4.dp), style = vType.headline)
-			IconAction(LineIcons.Close, "Fermer", inOnClose, inTint = KeeColors.text)
-		}
-
-		SettingsSection("Verrouillage automatique") {
-			BasicText("Après inactivité", style = vType.body)
-			Choices(kIdleChoices, vSettings.idleMinutes, { "$it min" }) { inController.updateSettings(vSettings.copy(idleMinutes = it)) }
-			BasicText("En arrière-plan", style = vType.body)
-			Choices(kHiddenChoices, vSettings.hiddenSeconds, { if (it == 0) "Aussitôt" else if (it < 60) "$it s" else "${it / 60} min" }) { inController.updateSettings(vSettings.copy(hiddenSeconds = it)) }
-		}
-
-		SettingsSection("Presse-papiers") {
-			BasicText("Effacé après", style = vType.body)
-			Choices(kClipboardChoices, vSettings.clipboardSeconds, { "$it s" }) { inController.updateSettings(vSettings.copy(clipboardSeconds = it)) }
-		}
-
-		if (!inDemo && inController.biometricAvailable)
-		{
-			var vReady by remember { mutableStateOf(inController.biometricReady) }			// empreinte active
-			SettingsSection("Empreinte") {
-				BasicText(if (vReady) "Active" else "Inactive", style = vType.body)
-				if (vReady)
-				{
-					BasicText("Redemander le mot de passe maître", style = vType.body)
-					Choices(kPasswordChoices, vSettings.passwordHours, { when (it) { 0 -> "Jamais"; 168 -> "1 semaine"; else -> "$it h" } }) {
-						inController.updateSettings(vSettings.copy(passwordHours = it))
-					}
-				}
-				if (vReady) GhostButton("Désactiver l'empreinte", { inController.disableBiometric(); inController.offerBiometricAgain(); vReady = false })
-				else TextLink("Proposer l'empreinte au prochain déverrouillage", { inController.offerBiometricAgain() })
+	CompositionLocalProvider(LocalButtonScale provides settingsButtonScale()) {
+		Column(
+			Modifier
+				.fillMaxSize()
+				.background(mistTop())
+				.keeTexture()
+				.safeDrawingPadding()
+				.imePadding()
+				.verticalScroll(rememberScrollState())
+				.padding(horizontal = 20.dp, vertical = 12.dp)
+				.widthIn(max = 640.dp),
+			verticalArrangement = Arrangement.spacedBy(20.dp)
+		) {
+			Row(verticalAlignment = Alignment.CenterVertically) {
+				IconAction(LineIcons.Back, "Retour", inOnClose, inTint = KeeColors.text)
+				BasicText("Réglages", Modifier.weight(1f).padding(start = 4.dp), style = vType.headline)
 			}
-		}
 
-		if (!inDemo)
-		{
-			SettingsSection("Mot de passe maître") { MasterPasswordForm(inController) }
+			SettingsSection("Verrouillage automatique") {
+				BasicText("Après inactivité", style = vType.body)
+				Choices(kIdleChoices, vSettings.idleMinutes, { "$it min" }) { inController.updateSettings(vSettings.copy(idleMinutes = it)) }
+				SettingsDivider()
+				BasicText("En arrière-plan", style = vType.body)
+				Choices(kHiddenChoices, vSettings.hiddenSeconds, { if (it == 0) "Aussitôt" else if (it < 60) "$it s" else "${it / 60} min" }) { inController.updateSettings(vSettings.copy(hiddenSeconds = it)) }
+			}
 
-			SettingsSection("Sauvegardes") {
-				val vBackups = remember(inController.screen) { inController.backups() }			// sauvegardes
-				if (vBackups.isEmpty()) BasicText("Aucune sauvegarde.", style = vType.bodySmall.copy(color = KeeColors.textFaint))
-				for (vBackup in vBackups)
-				{
-					Row(
-						Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(KeeColors.surface).padding(start = 16.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
-						verticalAlignment = Alignment.CenterVertically
-					) {
-						Column(Modifier.weight(1f)) {
-							OneLine(vBackup.day.format(kDay).replaceFirstChar { it.uppercaseChar() }, vType.label)
-							BasicText("${(vBackup.size + 1023) / 1024} Ko", style = vType.bodySmall)
+			SettingsSection("Presse-papiers") {
+				BasicText("Effacé après", style = vType.body)
+				Choices(kClipboardChoices, vSettings.clipboardSeconds, { "$it s" }) { inController.updateSettings(vSettings.copy(clipboardSeconds = it)) }
+			}
+
+			if (!inDemo && inController.biometricAvailable)
+			{
+				var vReady by remember { mutableStateOf(inController.biometricReady) }			// empreinte active
+				SettingsSection("Empreinte") {
+					BasicText(if (vReady) "Active" else "Inactive", style = vType.body)
+					if (vReady)
+					{
+						SettingsDivider()
+						BasicText("Redemander le mot de passe maître", style = vType.body)
+						Choices(kPasswordChoices, vSettings.passwordHours, { when (it) { 0 -> "Jamais"; 168 -> "1 semaine"; else -> "$it h" } }) {
+							inController.updateSettings(vSettings.copy(passwordHours = it))
 						}
-						IconAction(LineIcons.Restore, "Restaurer la sauvegarde du ${vBackup.day}", { vRestore = vBackup }, inTint = KeeColors.text)
+					}
+					if (vReady) SettingsDivider()
+					if (vReady) GhostButton("Désactiver l'empreinte", { inController.disableBiometric(); inController.offerBiometricAgain(); vReady = false })
+					else TextLink("Proposer l'empreinte au prochain déverrouillage", { inController.offerBiometricAgain() })
+				}
+			}
+
+			if (!inDemo)
+			{
+				SettingsSection("Mot de passe maître") { MasterPasswordForm(inController) }
+
+				SettingsSection("Sauvegardes") {
+					val vBackups = remember(inController.screen) { inController.backups() }			// sauvegardes
+					if (vBackups.isEmpty()) BasicText("Aucune sauvegarde.", style = vType.bodySmall.copy(color = KeeColors.textFaint))
+					for (vBackup in vBackups)
+					{
+						Row(
+							Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(KeeColors.surfaceHigh).padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+							verticalAlignment = Alignment.CenterVertically
+						) {
+							Column(Modifier.weight(1f)) {
+								OneLine(vBackup.day.format(kDay).replaceFirstChar { it.uppercaseChar() }, vType.label)
+								BasicText("${(vBackup.size + 1023) / 1024} Ko", style = vType.bodySmall)
+							}
+							IconAction(LineIcons.Restore, "Restaurer la sauvegarde du ${vBackup.day}", { vRestore = vBackup }, inTint = KeeColors.text)
+						}
 					}
 				}
 			}
-		}
 
-		inController.updates?.let { vUpdates ->
-			var vMessage by remember { mutableStateOf<String?>(null) }							// résultat de la vérification
-			SettingsSection("Mises à jour") {
-				BasicText("Version ${vUpdates.version ?: "de développement"}", style = vType.body)
-				Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-					FilterPill("Au lancement", vSettings.updates) { inController.updateSettings(vSettings.copy(updates = true)) }
-					FilterPill("Jamais", !vSettings.updates) { inController.updateSettings(vSettings.copy(updates = false)) }
+			inController.updates?.let { vUpdates ->
+				var vMessage by remember { mutableStateOf<String?>(null) }							// résultat de la vérification
+				SettingsSection("Mises à jour") {
+					BasicText("Version ${vUpdates.version ?: "de développement"}", style = vType.body)
+					SettingsDivider()
+					Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+						FilterPill("Au lancement", vSettings.updates) { inController.updateSettings(vSettings.copy(updates = true)) }
+						FilterPill("Jamais", !vSettings.updates) { inController.updateSettings(vSettings.copy(updates = false)) }
+					}
+					vMessage?.let { BasicText(it, style = vType.bodySmall) }
+					GhostButton("Vérifier maintenant", { vMessage = null; vUpdates.checkNow { vMessage = it } })
 				}
-				vMessage?.let { BasicText(it, style = vType.bodySmall) }
-				GhostButton("Vérifier maintenant", { vMessage = null; vUpdates.checkNow { vMessage = it } })
 			}
-		}
 
-		inExtra?.let { vExtra -> Column(verticalArrangement = Arrangement.spacedBy(22.dp)) { vExtra() } }
+			inExtra?.let { vExtra -> Column(verticalArrangement = Arrangement.spacedBy(20.dp)) { vExtra() } }
+		}
 	}
 	vRestore?.let { vBackup ->
 		ConfirmDialog(
@@ -248,18 +262,39 @@ private fun Choices(
 }
 
 /*
-	Section des réglages : titre discret puis contenu.
+	Section des réglages : titre discret, puis une carte (fond légèrement
+	plus clair, coins arrondis) qui regroupe ses réglages. Partagée avec les
+	réglages propres au téléphone et au PC.
 	inTitle   : titre
-	inContent : contenu
+	inContent : réglages de la section
 */
 @Composable
-private fun SettingsSection(
+fun SettingsSection(
 	inTitle   : String,
 	inContent : @Composable ColumnScope.() -> Unit
 )
 {
-	Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-		BasicText(inTitle, style = keeType().bodySmall)
-		inContent()
+	Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+		BasicText(inTitle, Modifier.padding(start = 4.dp), style = keeType().bodySmall)
+		Column(
+			Modifier
+				.fillMaxWidth()
+				.clip(RoundedCornerShape(20.dp))
+				.background(KeeColors.surface)
+				.border(1.dp, KeeColors.rule, RoundedCornerShape(20.dp))
+				.padding(16.dp),
+			verticalArrangement = Arrangement.spacedBy(12.dp),
+			content             = inContent
+		)
 	}
 }
+
+/*
+	Trait fin entre deux réglages d'une même section.
+*/
+@Composable
+fun SettingsDivider()
+{
+	Box(Modifier.fillMaxWidth().height(1.dp).background(KeeColors.rule))
+}
+

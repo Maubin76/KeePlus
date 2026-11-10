@@ -19,6 +19,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import java.util.UUID
 
 /*
 	Empreinte simulée : garde le mot de passe en clair (test seulement).
@@ -203,6 +204,25 @@ class AutoLockTest
 		assertFalse(vController.biometricReady)
 		vController.updateSettings(KeeSettings(passwordHours = 0))
 		assertTrue(vController.biometricReady)
+	}
+
+	/*
+		Choisir une entrée, en créer ou en modifier une ferme les réglages et
+		les appareils (sur PC, ils occupent la place de la fiche).
+	*/
+	@Test
+	fun entryClosesPages()
+	{
+		val vController = opened()																// coffre ouvert
+		val vId         = UUID.randomUUID()													// entrée
+		vController.showSettings = true
+		vController.select(vId)
+		assertFalse(vController.showSettings)
+		assertEquals(vId, vController.selected)
+		vController.showDevices = true
+		vController.startNew()
+		assertFalse(vController.showDevices)
+		assertNotNull(vController.editing)
 	}
 
 	/*

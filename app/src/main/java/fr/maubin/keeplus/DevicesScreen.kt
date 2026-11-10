@@ -33,10 +33,15 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import fr.maubin.keeplus.link.PairingOffer
 import fr.maubin.keeplus.sync.PairedPc
+import fr.maubin.keeplus.ui.components.keeTexture
 import fr.maubin.keeplus.ui.components.FilterPill
+import fr.maubin.keeplus.ui.components.keeTexture
 import fr.maubin.keeplus.ui.components.IconAction
+import fr.maubin.keeplus.ui.components.keeTexture
 import fr.maubin.keeplus.ui.components.Monogram
+import fr.maubin.keeplus.ui.components.keeTexture
 import fr.maubin.keeplus.ui.components.OneLine
+import fr.maubin.keeplus.ui.components.keeTexture
 import fr.maubin.keeplus.ui.components.SilverButton
 import fr.maubin.keeplus.ui.icons.LineIcons
 import fr.maubin.keeplus.ui.screens.ConfirmDialog
@@ -91,6 +96,7 @@ fun DevicesScreen(
 		Modifier
 			.fillMaxSize()
 			.background(Brush.verticalGradient(0f to KeeColors.mistMid.copy(alpha = 0.32f), 0.16f to KeeColors.ground, 1f to KeeColors.ground))
+			.keeTexture()
 			.safeDrawingPadding()
 			.verticalScroll(rememberScrollState())
 			.padding(horizontal = 20.dp, vertical = 12.dp),

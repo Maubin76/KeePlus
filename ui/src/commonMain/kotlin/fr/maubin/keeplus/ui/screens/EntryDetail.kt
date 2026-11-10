@@ -28,6 +28,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import fr.maubin.keeplus.ui.components.keeTexture
 import fr.maubin.keeplus.ui.components.GhostButton
 import fr.maubin.keeplus.ui.components.IconAction
 import fr.maubin.keeplus.ui.components.Monogram
@@ -74,6 +75,7 @@ fun EntryDetail(
 		Modifier
 			.fillMaxSize()
 			.background(mistTop())
+			.keeTexture()
 			.safeDrawingPadding()
 			.verticalScroll(rememberScrollState())
 			.padding(horizontal = 20.dp, vertical = 12.dp)

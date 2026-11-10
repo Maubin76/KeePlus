@@ -20,6 +20,7 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -29,6 +30,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import fr.maubin.keeplus.ui.platform.animationsEnabled
 import fr.maubin.keeplus.ui.theme.KeeColors
@@ -36,6 +38,24 @@ import fr.maubin.keeplus.ui.theme.keeType
 
 private val kPill          = RoundedCornerShape(percent = 50)							// forme en pilule
 private val kButtonHeight  = 56.dp															// hauteur des boutons
+
+/*
+	Échelle des boutons (hauteur, marges, texte) de la partie d'écran qui la
+	fournit : 1 par défaut ; 0,8 dans les réglages sur Android (voir
+	settingsButtonScale).
+*/
+val LocalButtonScale = staticCompositionLocalOf { 1f }
+
+/*
+	Style de texte d'un bouton à l'échelle donnée.
+	inStyle : style de base
+	inScale : échelle
+*/
+internal fun scaled(
+	inStyle : TextStyle,
+	inScale : Float
+): TextStyle =
+	if (inScale == 1f) inStyle else inStyle.copy(fontSize = inStyle.fontSize * inScale, lineHeight = inStyle.lineHeight * inScale)
 private const val kShinePeriod = 6000														// période du reflet (ms)
 private const val kShinePass   = 1400														// durée du passage du reflet (ms)
 
@@ -59,10 +79,11 @@ fun SilverButton(
 	val vPressed by vSource.collectIsPressedAsState()										// bouton enfoncé
 	val vScale   by animateFloatAsState(if (vPressed) 0.98f else 1f)						// léger enfoncement
 	val vShine   = if (animationsEnabled()) shineProgress() else -1f						// position du reflet
+	val vSize    = LocalButtonScale.current													// échelle des boutons
 	Box(
 		inModifier
 			.fillMaxWidth()
-			.height(kButtonHeight)
+			.height(kButtonHeight * vSize)
 			.graphicsLayer { scaleX = vScale; scaleY = vScale; alpha = if (inEnabled) 1f else 0.55f }
 			.clip(kPill)
 			.drawBehind {
@@ -81,7 +102,7 @@ fun SilverButton(
 			.clickable(vSource, null, inEnabled, role = Role.Button, onClick = inOnClick),
 		contentAlignment = Alignment.Center
 	) {
-		BasicText(inLabel, style = keeType().label.copy(color = KeeColors.silverInk))
+		BasicText(inLabel, style = scaled(keeType().label, vSize).copy(color = KeeColors.silverInk))
 	}
 }
 
@@ -100,17 +121,18 @@ fun GhostButton(
 	inEnabled  : Boolean  = true
 )
 {
+	val vSize = LocalButtonScale.current														// échelle des boutons
 	Box(
 		inModifier
 			.fillMaxWidth()
-			.height(kButtonHeight)
+			.height(kButtonHeight * vSize)
 			.graphicsLayer { alpha = if (inEnabled) 1f else 0.55f }
 			.clip(kPill)
 			.border(1.dp, KeeColors.rule, kPill)
 			.clickable(enabled = inEnabled, role = Role.Button, onClick = inOnClick),
 		contentAlignment = Alignment.Center
 	) {
-		BasicText(inLabel, style = keeType().label)
+		BasicText(inLabel, style = scaled(keeType().label, vSize))
 	}
 }
 
@@ -127,10 +149,11 @@ fun TextLink(
 	inModifier : Modifier = Modifier
 )
 {
+	val vSize = LocalButtonScale.current														// échelle des boutons
 	BasicText(
 		inLabel,
-		inModifier.clip(kPill).clickable(role = Role.Button, onClick = inOnClick).padding(horizontal = 12.dp, vertical = 10.dp),
-		style = keeType().label.copy(color = KeeColors.textMuted)
+		inModifier.clip(kPill).clickable(role = Role.Button, onClick = inOnClick).padding(horizontal = 12.dp * vSize, vertical = 10.dp * vSize),
+		style = scaled(keeType().label, vSize).copy(color = KeeColors.textMuted)
 	)
 }
 

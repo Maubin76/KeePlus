@@ -2,6 +2,9 @@ package fr.maubin.keeplus.autofill
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeOut
@@ -202,9 +205,10 @@ fun SignUpCard(
 {
 	var vVault by remember { mutableStateOf(inOpened) }											// coffre ouvert ; null avant
 	AutofillCardFrame(inMotion, "Nouveau compte", inRequest.name, inOnCancel) {
-		val vOpen = vVault																		// coffre affiché
-		if (vOpen == null) UnlockPart(inUnlock, "Déverrouillez KeePlus pour créer et enregistrer ce compte.") { vNew -> inOnOpened(vNew); vVault = vNew }
-		else ProposalPart(inRequest, vOpen, inOnFill, inOnCancel)
+		CardSteps(vVault, { it != null }) { vOpen ->
+			if (vOpen == null) UnlockPart(inUnlock, "Déverrouillez KeePlus pour créer et enregistrer ce compte.") { vNew -> inOnOpened(vNew); vVault = vNew }
+			else ProposalPart(inRequest, vOpen, inOnFill, inOnCancel)
+		}
 	}
 }
 
@@ -235,10 +239,56 @@ fun LoginCard(
 {
 	var vVault by remember { mutableStateOf(inOpened) }											// coffre ouvert ; null avant
 	AutofillCardFrame(inMotion, "Connexion", inRequest.name, inOnCancel) {
-		val vOpen = vVault																		// coffre affiché
-		if (vOpen == null) UnlockPart(inUnlock, "Déverrouillez KeePlus pour remplir ce formulaire.") { vNew -> inOnOpened(vNew); vVault = vNew }
-		else PickerPart(inRequest, vOpen, inOnPick = inOnPick)
+		CardSteps(vVault, { it != null }) { vOpen ->
+			if (vOpen == null) UnlockPart(inUnlock, "Déverrouillez KeePlus pour remplir ce formulaire.") { vNew -> inOnOpened(vNew); vVault = vNew }
+			else PickerPart(inRequest, vOpen, inOnPick = inOnPick)
+		}
 	}
+}
+
+/*
+	Étapes d'une carte (déverrouillage, puis choix, puis proposition…) : la
+	nouvelle étape arrive en fondu en glissant légèrement vers le haut,
+	l'ancienne s'efface vite, et la carte s'agrandit ou se rétracte en
+	douceur pour suivre la hauteur du contenu.
+	inStep    : étape actuelle (données affichées)
+	inKey     : ce qui distingue deux étapes : seul un changement de clé est animé
+	inContent : contenu de l'étape
+*/
+@Composable
+private fun <S> CardSteps(
+	inStep    : S,
+	inKey     : (S) -> Any?,
+	inContent : @Composable ColumnScope.(S) -> Unit
+)
+{
+	AnimatedContent(
+		targetState    = inStep,
+		contentKey     = inKey,
+		transitionSpec = {
+			(fadeIn(tween(240, delayMillis = 80)) + slideInVertically(tween(320)) { it / 10 }) togetherWith
+				fadeOut(tween(100)) using SizeTransform(clip = false) { _, _ -> spring(dampingRatio = 0.9f, stiffness = 380f) }
+		},
+		label          = "étape de la carte"
+	) { vStep ->
+		Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) { inContent(vStep) }
+	}
+}
+
+/*
+	Étape de la carte de changement de mot de passe.
+	vault : coffre ouvert ; null avant le déverrouillage
+	id    : compte retenu ; null pendant le choix
+*/
+private data class ChangeStep(
+	val vault : Vault?,
+	val id    : UUID?
+)
+{
+	/*
+		Nature de l'étape : déverrouillage, choix du compte, proposition.
+	*/
+	val kind: Int get() = when { vault == null -> 0; id == null -> 1; else -> 2 }
 }
 
 /*
@@ -374,6 +424,7 @@ private fun PickerPart(
 		vMatches.isNotEmpty() -> vMatches
 		else                  -> inVault.items()
 	}																						// comptes affichés
+	val vShared   = sharedTitles(vItems)														// titres portés par plusieurs comptes
 	SearchField(vQuery, inPlaceholder = "Chercher dans le coffre")
 	if (inLinkable && inRequest.target.isApp && (vText.isNotEmpty() || vMatches.isEmpty()))
 	{
@@ -385,19 +436,26 @@ private fun PickerPart(
 		vText.isEmpty() && vMatches.isEmpty() -> BasicText("Aucun compte lié à « ${inRequest.name} » : choisissez-en un.", style = vType.bodySmall)
 	}
 	LazyColumn(Modifier.fillMaxWidth().heightIn(max = 300.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-		items(vItems, key = { it.id }) { vItem -> PickerRow(vItem) { inOnPick(inVault, vItem.id, vRemember && vItem !in vMatches) } }
+		items(vItems, key = { it.id }) { vItem ->
+			PickerRow(vItem, vItem.title in vShared) { inOnPick(inVault, vItem.id, vRemember && vItem !in vMatches) }
+		}
 	}
 }
 
 /*
-	Ligne d'un compte : monogramme, titre, identifiant.
-	inItem    : entrée
-	inOnClick : choix du compte
+	Ligne d'un compte : monogramme, titre, identifiant. Quand plusieurs
+	comptes de la liste portent le même titre (plusieurs comptes pour une
+	même appli), l'identifiant passe en avant (ligne principale et
+	monogramme) : c'est lui qui les distingue.
+	inItem      : entrée
+	inUserFirst : identifiant en avant
+	inOnClick   : choix du compte
 */
 @Composable
 private fun PickerRow(
-	inItem    : VaultItem,
-	inOnClick : () -> Unit
+	inItem      : VaultItem,
+	inUserFirst : Boolean = false,
+	inOnClick   : () -> Unit
 )
 {
 	val vType = keeType()																		// styles de texte
@@ -409,11 +467,14 @@ private fun PickerRow(
 			.padding(horizontal = 4.dp, vertical = 8.dp),
 		verticalAlignment = Alignment.CenterVertically
 	) {
-		Monogram(inItem.title, inSize = 40.dp)
+		val vTitle = inItem.title.ifBlank { "Sans titre" }											// titre
+		val vUser  = inUserFirst && inItem.userName.isNotBlank()									// identifiant en avant
+		Monogram(if (vUser) inItem.userName else inItem.title, inSize = 40.dp)
 		Spacer(Modifier.width(14.dp))
 		Column(Modifier.weight(1f)) {
-			OneLine(inItem.title.ifBlank { "Sans titre" }, vType.title)
-			if (inItem.userName.isNotBlank()) OneLine(inItem.userName, vType.bodySmall)
+			OneLine(if (vUser) inItem.userName else vTitle, vType.title)
+			val vDetail = if (vUser) vTitle else inItem.userName									// seconde ligne
+			if (vDetail.isNotBlank()) OneLine(vDetail, vType.bodySmall)
 		}
 	}
 }
@@ -482,11 +543,16 @@ fun ChangeCard(
 	AutofillCardFrame(inMotion, "Changer le mot de passe", inRequest.name, inOnCancel) {
 		val vOpen = vVault																		// coffre affiché
 		val vId   = vChosen ?: vOpen?.autofillMatches(inRequest.target)?.singleOrNull()?.id		// compte retenu
-		when
-		{
-			vOpen == null           -> UnlockPart(inUnlock, "Déverrouillez KeePlus pour changer ce mot de passe.") { vNew -> inOnOpened(vNew); vVault = vNew }
-			vId == null || vPicking -> PickerPart(inRequest, vOpen, inLinkable = false) { _, vPicked, _ -> vChosen = vPicked; vPicking = false }
-			else                    -> ChangePart(vOpen, vId, { vPicking = true }, inOnFill, inOnCancel)
+		val vStep = ChangeStep(vOpen, if (vPicking) null else vId)								// étape affichée
+		CardSteps(vStep, { it.kind }) { vShown ->
+			val vShownVault = vShown.vault																// coffre de l'étape
+			val vShownId    = vShown.id																	// compte de l'étape
+			when
+			{
+				vShownVault == null -> UnlockPart(inUnlock, "Déverrouillez KeePlus pour changer ce mot de passe.") { vNew -> inOnOpened(vNew); vVault = vNew }
+				vShownId == null    -> PickerPart(inRequest, vShownVault, inLinkable = false) { _, vPicked, _ -> vChosen = vPicked; vPicking = false }
+				else                -> ChangePart(vShownVault, vShownId, { vPicking = true }, inOnFill, inOnCancel)
+			}
 		}
 	}
 }
@@ -586,40 +652,49 @@ fun SaveCard(
 	val vType  = keeType()																		// styles de texte
 	var vVault by remember { mutableStateOf(inOpened) }											// coffre ouvert ; null avant
 	AutofillCardFrame(inMotion, "Enregistrer", inName, inOnCancel) {
-		val vOpen = vVault																		// coffre affiché
-		if (vOpen == null)
-		{
-			UnlockPart(inUnlock, "Déverrouillez KeePlus pour enregistrer ce compte.") { vNew -> inOnOpened(vNew); vVault = vNew }
-			return@AutofillCardFrame
-		}
-		val vState = remember(vOpen) { vOpen.savedLogin(inTarget, inUserName, inPassword) }	// compte connu ou non
-		Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-			BasicText("Identifiant", style = vType.label)
-			BasicText(inUserName.ifBlank { "(aucun)" }, style = vType.body)
-		}
-		Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-			BasicText("Mot de passe", style = vType.label)
-			BasicText("•".repeat(inPassword.length.coerceIn(8, 20)), style = vType.secret)
-		}
-		when (vState)
-		{
-			SavedLogin.New       -> SilverButton("Enregistrer dans le coffre", { inOnSave(vOpen) })
-			is SavedLogin.Update ->
+		CardSteps(vVault, { it != null }) { vOpen ->
+			if (vOpen == null)
 			{
-				BasicText("Le mot de passe de « ${vState.title} » a changé ; l'ancien restera dans son historique.", style = vType.bodySmall)
-				SilverButton("Mettre à jour", { inOnSave(vOpen) })
+				UnlockPart(inUnlock, "Déverrouillez KeePlus pour enregistrer ce compte.") { vNew -> inOnOpened(vNew); vVault = vNew }
+				return@CardSteps
 			}
-			is SavedLogin.Same   ->
+			val vState = remember(vOpen) { vOpen.savedLogin(inTarget, inUserName, inPassword) }	// compte connu ou non
+			Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+				BasicText("Identifiant", style = vType.label)
+				BasicText(inUserName.ifBlank { "(aucun)" }, style = vType.body)
+			}
+			Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+				BasicText("Mot de passe", style = vType.label)
+				BasicText("•".repeat(inPassword.length.coerceIn(8, 20)), style = vType.secret)
+			}
+			when (vState)
 			{
-				BasicText("Ce compte est déjà enregistré tel quel.", style = vType.bodySmall)
-				SilverButton("Fermer", inOnCancel)
+				SavedLogin.New       -> SilverButton("Enregistrer dans le coffre", { inOnSave(vOpen) })
+				is SavedLogin.Update ->
+				{
+					BasicText("Le mot de passe de « ${vState.title} » a changé ; l'ancien restera dans son historique.", style = vType.bodySmall)
+					SilverButton("Mettre à jour", { inOnSave(vOpen) })
+				}
+				is SavedLogin.Same   ->
+				{
+					BasicText("Ce compte est déjà enregistré tel quel.", style = vType.bodySmall)
+					SilverButton("Fermer", inOnCancel)
+				}
 			}
-		}
-		if (vState !is SavedLogin.Same)
-		{
-			Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-				TextLink("Ne pas enregistrer", inOnCancel)
+			if (vState !is SavedLogin.Same)
+			{
+				Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+					TextLink("Ne pas enregistrer", inOnCancel)
+				}
 			}
 		}
 	}
 }
+
+/*
+	Titres portés par plusieurs comptes d'une liste (sans tenir compte des
+	majuscules).
+	inItems : comptes
+*/
+internal fun sharedTitles(inItems: List<VaultItem>): Set<String> =
+	inItems.groupBy { it.title.trim().lowercase() }.filterValues { it.size > 1 }.values.flatten().map { it.title }.toSet()

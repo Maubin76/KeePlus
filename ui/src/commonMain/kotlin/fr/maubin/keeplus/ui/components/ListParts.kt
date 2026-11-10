@@ -109,13 +109,14 @@ fun IconAction(
 	inTint        : Color    = KeeColors.textMuted
 )
 {
+	val vSize = LocalButtonScale.current														// échelle des boutons
 	Icon(
 		inIcon, inDescription,
 		inModifier
-			.size(44.dp)
+			.size(44.dp * vSize)
 			.clip(CircleShape)
 			.clickable(role = Role.Button, onClick = inOnClick)
-			.padding(11.dp),
+			.padding(11.dp * vSize),
 		tint = inTint
 	)
 }
@@ -168,7 +169,8 @@ fun FilterPill(
 	inOnClick  : () -> Unit
 )
 {
-	val vStyle = keeType().label																// style du texte
+	val vSize  = LocalButtonScale.current														// échelle des boutons
+	val vStyle = scaled(keeType().label, vSize)													// style du texte
 	BasicText(
 		inLabel,
 		Modifier
@@ -176,7 +178,7 @@ fun FilterPill(
 			.background(if (inSelected) KeeColors.text else Color.Transparent)
 			.border(1.dp, if (inSelected) KeeColors.text else KeeColors.rule, kPill)
 			.clickable(role = Role.Tab, onClick = inOnClick)
-			.padding(horizontal = 16.dp, vertical = 8.dp),
+			.padding(horizontal = 16.dp * vSize, vertical = 8.dp * vSize),
 		style = vStyle.copy(color = if (inSelected) KeeColors.void else KeeColors.text)
 	)
 }

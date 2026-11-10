@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import fr.maubin.keeplus.ui.components.GhostButton
 import fr.maubin.keeplus.ui.screens.ErrorLine
+import fr.maubin.keeplus.ui.screens.SettingsSection
 import fr.maubin.keeplus.ui.theme.KeeColors
 import fr.maubin.keeplus.ui.theme.keeType
 import fr.maubin.keeplus.vault.VaultStore
@@ -57,8 +58,7 @@ fun PhoneSettings(inStore: VaultStore)
 		}
 	}																						// choix du fichier d'export
 	AutofillSettings()
-	Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-		BasicText("Export", style = vType.bodySmall)
+	SettingsSection("Export") {
 		vResult?.let { BasicText(it, style = vType.body.copy(color = KeeColors.success)) }
 		ErrorLine(vError)
 		GhostButton("Exporter le coffre", { vResult = null; vError = null; vExport.launch("KeePlus-${LocalDate.now()}.kdbx") })
@@ -80,8 +80,7 @@ private fun AutofillSettings()
 		vEnabled = vContext.getSystemService(AutofillManager::class.java)?.hasEnabledAutofillServices() == true
 		onPauseOrDispose {}
 	}
-	Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-		BasicText("Auto-remplissage", style = vType.bodySmall)
+	SettingsSection("Auto-remplissage") {
 		if (vEnabled)
 		{
 			BasicText("Actif", style = vType.body.copy(color = KeeColors.success))
