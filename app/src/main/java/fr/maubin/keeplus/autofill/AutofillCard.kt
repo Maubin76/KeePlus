@@ -48,6 +48,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import fr.maubin.keeplus.generator.PasswordOptions
@@ -475,24 +476,29 @@ fun ChangeCard(
 	inOnCancel : () -> Unit
 )
 {
-	var vVault  by remember { mutableStateOf(inOpened) }											// coffre ouvert ; null avant
-	var vChosen by remember { mutableStateOf<UUID?>(null) }										// compte choisi ; null avant
+	var vVault   by remember { mutableStateOf(inOpened) }										// coffre ouvert ; null avant
+	var vChosen  by remember { mutableStateOf<UUID?>(null) }									// compte choisi ; null avant
+	var vPicking by remember { mutableStateOf(false) }											// choix d'un autre compte en cours
 	AutofillCardFrame(inMotion, "Changer le mot de passe", inRequest.name, inOnCancel) {
 		val vOpen = vVault																		// coffre affiché
 		val vId   = vChosen ?: vOpen?.autofillMatches(inRequest.target)?.singleOrNull()?.id		// compte retenu
 		when
 		{
-			vOpen == null -> UnlockPart(inUnlock, "Déverrouillez KeePlus pour changer ce mot de passe.") { vNew -> inOnOpened(vNew); vVault = vNew }
-			vId == null   -> PickerPart(inRequest, vOpen, inLinkable = false) { _, vPicked, _ -> vChosen = vPicked }
-			else          -> ChangePart(vOpen, vId, inOnFill, inOnCancel)
+			vOpen == null           -> UnlockPart(inUnlock, "Déverrouillez KeePlus pour changer ce mot de passe.") { vNew -> inOnOpened(vNew); vVault = vNew }
+			vId == null || vPicking -> PickerPart(inRequest, vOpen, inLinkable = false) { _, vPicked, _ -> vChosen = vPicked; vPicking = false }
+			else                    -> ChangePart(vOpen, vId, { vPicking = true }, inOnFill, inOnCancel)
 		}
 	}
 }
 
 /*
-	Proposition du nouveau mot de passe pour un compte.
+	Changement pour un compte, dans l'ordre du formulaire : le compte (avec
+	« Autre compte » pour en choisir un autre), le mot de passe actuel repris
+	de l'entrée (il confirme l'identité auprès de l'appli ou du site ; masqué,
+	l'œil le dévoile), puis le nouveau mot de passe généré.
 	inVault    : coffre ouvert
 	inId       : entrée du compte
+	inOnOther  : choisir un autre compte
 	inOnFill   : remplir et mettre à jour
 	inOnCancel : fermeture sans remplir
 */
@@ -500,15 +506,40 @@ fun ChangeCard(
 private fun ChangePart(
 	inVault    : Vault,
 	inId       : UUID,
+	inOnOther  : () -> Unit,
 	inOnFill   : (Vault, UUID, String) -> Unit,
 	inOnCancel : () -> Unit
 )
 {
 	val vType     = keeType()																	// styles de texte
 	val vItem     = remember(inVault, inId) { inVault.items().firstOrNull { it.id == inId } }	// compte
+	val vCurrent  = remember(inVault, inId) { inVault.draft(inId)?.password.orEmpty() }		// mot de passe actuel
+	var vShown    by remember { mutableStateOf(false) }										// mot de passe actuel dévoilé
 	var vOptions  by remember { mutableStateOf(PasswordOptions()) }							// réglages du générateur
 	var vPassword by remember { mutableStateOf(generatePassword(vOptions)) }				// nouveau mot de passe
-	vItem?.let { vShown -> PickerRow(vShown) {} }
+	Row(verticalAlignment = Alignment.CenterVertically) {
+		Box(Modifier.weight(1f)) { vItem?.let { vAccount -> PickerRow(vAccount) {} } }
+		TextLink("Autre compte", inOnOther)
+	}
+	Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+		BasicText("Mot de passe actuel (repris de KeePlus)", style = vType.label)
+		Row(
+			Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(KeeColors.void.copy(alpha = 0.6f)).padding(start = 14.dp),
+			verticalAlignment = Alignment.CenterVertically
+		) {
+			val vText = when
+			{
+				vCurrent.isEmpty() -> "(aucun dans l'entrée)"
+				vShown             -> vCurrent
+				else               -> "•".repeat(vCurrent.length.coerceIn(8, 20))
+			}																					// texte affiché
+			BasicText(if (vShown && vCurrent.isNotEmpty()) secretAnnotated(vText) else AnnotatedString(vText), Modifier.weight(1f).padding(vertical = 8.dp), style = vType.secret)
+			if (vCurrent.isNotEmpty())
+			{
+				IconAction(if (vShown) LineIcons.EyeOff else LineIcons.Eye, if (vShown) "Masquer le mot de passe actuel" else "Afficher le mot de passe actuel", { vShown = !vShown })
+			}
+		}
+	}
 	GeneratedPassword(
 		inLabel    = "Nouveau mot de passe (et sa confirmation)",
 		inValue    = vPassword,
