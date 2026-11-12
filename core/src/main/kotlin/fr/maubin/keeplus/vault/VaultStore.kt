@@ -10,29 +10,45 @@ import java.io.File
 private val kFileLock = Any()															// accès au fichier du coffre, pour tout le processus (appli et tâche de fond)
 
 /*
-	Emplacement du coffre de l'appareil : un seul fichier .kdbx, propre à
-	l'appli (stockage privé sur Android, %APPDATA%\KeePlus sur PC). Les
+	Coffre de l'appareil : un seul fichier .kdbx, à l'emplacement par défaut
+	de l'appli (stockage privé sur Android, %APPDATA%\KeePlus sur PC) ou dans
+	un dossier choisi (voir VaultLocation, moveTo). Les
 	opérations coûteuses (Argon2, écriture) se font hors du fil de
 	l'interface.
 	Le fichier peut être remplacé par la synchronisation (voir VaultFile) :
 	l'appli retient l'empreinte du dernier coffre qu'elle a lu ou écrit, et
 	n'écrase jamais un coffre arrivé entre-temps (voir save).
 	Avant la première modification du jour, le coffre est sauvegardé.
-	fFile    : fichier du coffre
-	fBackups : sauvegardes automatiques ; null sans
-	fKnown   : empreinte du dernier coffre lu ou écrit par l'appli ; null avant
+	fLocation : emplacement du fichier du coffre
+	fBackups  : sauvegardes automatiques ; null sans
+	fKnown    : empreinte du dernier coffre lu ou écrit par l'appli ; null avant
 */
 class VaultStore(
-	private val fFile    : File,
-	val fBackups         : VaultBackups? = null
+	val fLocation         : VaultLocation,
+	val fBackups          : VaultBackups? = null
 ) : VaultFile
 {
 	@Volatile private var fKnown: String? = null
 
 	/*
+		Coffre à un emplacement fixe.
+		inFile    : fichier du coffre
+		inBackups : sauvegardes automatiques ; null sans
+	*/
+	constructor(
+		inFile    : File,
+		inBackups : VaultBackups? = null
+	) : this(VaultLocation(inFile), inBackups)
+
+	/*
+		Fichier du coffre (relu à chaque accès : il suit un déplacement).
+	*/
+	val file: File get() = fLocation.file
+
+	/*
 		Vrai si un coffre existe déjà sur l'appareil.
 	*/
-	fun exists(): Boolean = fFile.isFile && fFile.length() > 0
+	fun exists(): Boolean = file.let { it.isFile && it.length() > 0 }
 
 	/*
 		Crée le coffre de l'appareil et l'écrit sur le disque.
@@ -113,7 +129,7 @@ class VaultStore(
 	/*
 		Octets du coffre ; null si l'appareil n'a pas de coffre.
 	*/
-	override fun read(): ByteArray? = synchronized(kFileLock) { if (exists()) fFile.readBytes() else null }
+	override fun read(): ByteArray? = synchronized(kFileLock) { file.takeIf { it.isFile && it.length() > 0 }?.readBytes() }
 
 	/*
 		Remplace le coffre par celui d'un autre appareil, seulement s'il n'a
@@ -128,7 +144,7 @@ class VaultStore(
 		val vNow = read()																	// coffre actuel
 		if (vNow?.let(::vaultFingerprint) != inExpected) return false
 		vNow?.let { fBackups?.daily(it) }
-		writeAtomic(fFile, inBytes)
+		writeAtomic(file, inBytes)
 		true
 	}
 
@@ -146,12 +162,73 @@ class VaultStore(
 	}
 
 	/*
+		Déplace le coffre dans un autre dossier (ou y place le futur coffre
+		s'il n'y en a pas encore) : copie, relue et comparée, puis bascule de
+		l'emplacement, et seulement alors suppression de l'ancien fichier. Un
+		coffre déjà présent dans le dossier n'est jamais écrasé ; si
+		l'appareil n'a pas encore de coffre, il devient le coffre de
+		l'appareil (coffre KeePlus d'une clé USB, d'un autre dossier…).
+		inFolder : dossier choisi
+		Rend null si c'est fait, sinon la raison de l'échec.
+	*/
+	fun moveTo(inFolder: File): String? = synchronized(kFileLock) {
+		if (!fLocation.movable) return "Emplacement fixe."
+		val vTarget  = File(inFolder, kVaultFileName).absoluteFile							// nouveau fichier
+		val vCurrent = file.absoluteFile														// fichier actuel
+		if (vTarget == vCurrent) return null
+		if (!exists() && vTarget.isFile && runCatching { isKeePassFile(vTarget.readBytes()) }.getOrDefault(false))
+		{
+			fLocation.point(vTarget)
+			fKnown = null
+			return null
+		}
+		if (vTarget.exists()) return "Ce dossier contient déjà un fichier $kVaultFileName : choisissez un autre dossier."
+		try
+		{
+			val vBytes = read()																// coffre actuel ; null sans
+			if (vBytes != null)
+			{
+				writeAtomic(vTarget, vBytes)
+				if (!vTarget.readBytes().contentEquals(vBytes))
+				{
+					vTarget.delete()
+					return "La copie du coffre relue ne correspond pas : rien n'a été déplacé."
+				}
+			}
+			else
+			{
+				vTarget.absoluteFile.parentFile?.mkdirs()
+				if (vTarget.parentFile?.canWrite() != true) return "Dossier inaccessible en écriture."
+			}
+			fLocation.point(vTarget)
+			if (vBytes != null) vCurrent.delete()
+			null
+		}
+		catch (vError: Exception)
+		{
+			if (vTarget.exists() && vTarget != file.absoluteFile) vTarget.delete()
+			"Dossier inaccessible : ${vError.message ?: vError::class.simpleName}"
+		}
+	}
+
+	/*
+		Supprime le coffre de l'appareil et ses sauvegardes. L'emplacement
+		choisi est gardé pour un prochain coffre.
+	*/
+	fun delete() = synchronized(kFileLock) {
+		file.delete()
+		File(file.absoluteFile.parentFile, file.name + ".tmp").delete()
+		fBackups?.clear()
+		fKnown = null
+	}
+
+	/*
 		Écrit un contenu et le retient comme connu.
 		inBytes : contenu
 	*/
 	private fun write(inBytes: ByteArray) = synchronized(kFileLock) {
 		read()?.let { fBackups?.daily(it) }
-		writeAtomic(fFile, inBytes)
+		writeAtomic(file, inBytes)
 		fKnown = vaultFingerprint(inBytes)
 	}
 

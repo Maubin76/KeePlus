@@ -64,7 +64,7 @@ private val kDay = DateTimeFormatter.ofPattern("EEEE d MMMM yyyy", Locale.FRENCH
 
 /*
 	Réglages : verrouillage, presse-papiers, empreinte, mot de passe maître,
-	sauvegardes, puis les réglages propres à la plateforme. En
+	sauvegardes, emplacement et suppression du coffre, puis les réglages propres à la plateforme. En
 	démonstration, seuls les réglages de l'appli sont proposés.
 	inController : état de l'appli
 	inDemo       : coffre de démonstration
@@ -154,6 +154,8 @@ fun SettingsScreen(
 						}
 					}
 				}
+
+				VaultSettings(inController)
 			}
 
 			inController.updates?.let { vUpdates ->

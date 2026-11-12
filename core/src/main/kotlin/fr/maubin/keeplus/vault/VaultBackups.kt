@@ -57,6 +57,14 @@ class VaultBackups(
 	}
 
 	/*
+		Supprime toutes les sauvegardes (suppression du coffre).
+	*/
+	fun clear()
+	{
+		list().forEach { it.file.delete() }
+	}
+
+	/*
 		Sauvegardes, de la plus récente à la plus ancienne.
 	*/
 	fun list(): List<VaultBackup> =

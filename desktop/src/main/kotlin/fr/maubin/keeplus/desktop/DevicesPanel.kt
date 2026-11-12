@@ -44,17 +44,22 @@ import fr.maubin.keeplus.ui.theme.KeeColors
 import fr.maubin.keeplus.ui.theme.keeType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 private val kWhen = DateTimeFormatter.ofPattern("d MMMM 'à' HH:mm", Locale.FRENCH)	// date de dernière synchronisation
+private const val kCallWaitMs = 25_000L													// attente de la réponse des téléphones à un appel (ms)
 
 /*
-	Page Appareils du PC : état de l'écoute, téléphones appairés, appairage
-	d'un téléphone par QR code, réseaux de la maison.
+	Page Appareils du PC : état de l'écoute, téléphones appairés,
+	synchronisation à la demande (appel des téléphones qui ont KeePlus
+	ouvert), appairage d'un téléphone par QR code, réseaux de la maison.
 	inSync    : synchronisation du PC
 	inOnClose : fermer la page
 */
@@ -69,6 +74,42 @@ fun DevicesPanel(
 	val vScope   = rememberCoroutineScope()													// actions (réseau, fichiers)
 	var vRemove  by remember { mutableStateOf<PairedPhone?>(null) }							// téléphone à retirer
 	var vNow     by remember { mutableStateOf(System.currentTimeMillis()) }					// horloge du compte à rebours
+	var vCalling by remember { mutableStateOf(false) }											// appel des téléphones en cours
+	var vSynced  by remember { mutableStateOf<String?>(null) }									// verdict : à jour
+	var vMissed  by remember { mutableStateOf<String?>(null) }									// verdict : pas à jour, et pourquoi
+	/*
+		Appelle les téléphones, puis attend qu'un téléphone ait échangé son
+		coffre avec le PC et donne le verdict : à jour, fusion en attente sur
+		le téléphone, ou aucune réponse.
+	*/
+	fun syncNow()
+	{
+		vCalling = true
+		vSynced  = null
+		vMissed  = null
+		vScope.launch {
+			val vStart = System.currentTimeMillis()													// début de l'appel
+			if (!withContext(Dispatchers.IO) { inSync.callPhones() })
+			{
+				vMissed  = "Le PC n'est pas sur le Wi-Fi de la maison : aucun téléphone ne peut le joindre."
+				vCalling = false
+				return@launch
+			}
+			withTimeoutOrNull(kCallWaitMs) { inSync.state.first { vState -> vState.last.values.any { it.at >= vStart && it.upToDate } } }
+			delay(1_500)
+			val vLast   = inSync.state.value.let { vState -> vState.phones.mapNotNull { vPhone -> vState.last[vPhone.id]?.takeIf { it.at >= vStart }?.let { vPhone.name to it } } }	// réponses à l'appel
+			val vReady  = vLast.filter { it.second.upToDate }.map { it.first }							// téléphones à jour
+			val vLate   = vLast.filter { !it.second.upToDate }.map { it.first }							// téléphones qui doivent fusionner
+			vSynced  = vReady.takeIf { it.isNotEmpty() }?.let { "À jour avec ${it.joinToString(", ")}." }
+			vMissed  = when
+			{
+				vLate.isNotEmpty() -> "${vLate.joinToString(", ")} : modifications des deux côtés, à fusionner. Déverrouillez KeePlus sur le téléphone."
+				vReady.isEmpty()   -> "Aucun téléphone n'a répondu : ouvrez KeePlus sur le téléphone, connecté au Wi-Fi de la maison."
+				else               -> null
+			}
+			vCalling = false
+		}
+	}
 	LaunchedEffect(vState.offer) {
 		while (vState.offer != null)
 		{
@@ -105,6 +146,12 @@ fun DevicesPanel(
 					}
 					IconAction(LineIcons.Trash, "Retirer ${vPhone.name}", { vRemove = vPhone })
 				}
+			}
+			if (vState.phones.isNotEmpty())
+			{
+				vSynced?.let { BasicText(it, style = vType.body.copy(color = KeeColors.success)) }
+				ErrorLine(vMissed)
+				GhostButton(if (vCalling) "Synchronisation…" else "Synchroniser maintenant", ::syncNow, inEnabled = !vCalling)
 			}
 			val vOffer = vState.offer																	// offre affichée
 			if (vOffer != null)

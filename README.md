@@ -98,6 +98,8 @@ restent hors de l'historique du presse-papiers de Windows et s'effacent d'eux-m�
 | **Verrouillage automatique** | Après inactivité, en arrière-plan, à l'extinction de l'écran ou au verrouillage de Windows | ✅ | ✅ |
 | **Synchronisation Wi-Fi** | Appairage par QR code, échanges chiffrés sur le réseau de la maison seulement | ✅ | ✅ |
 | **Sauvegardes** | Copie quotidienne du coffre chiffré, restauration en un clic | ✅ | ✅ |
+| **Emplacement du coffre** | Coffre rangé dans le dossier de votre choix (clé USB, carte SD…), déplacé sans risque | ✅ | ✅ |
+| **Suppression du coffre** | Coffre et sauvegardes effacés de l'appareil, après le mot de passe maître | ✅ | ✅ |
 | **Export** | Copie du coffre chiffré vers le fichier de votre choix | ✅ | — |
 | **Mises à jour** | Nouvelle version proposée, vérifiée et installée par l'appli | ✅ | ✅ |
 | **Zone de notification** | L'appli reste près de l'horloge, prête pour le téléphone ; démarrage avec Windows au choix | — | ✅ |
@@ -125,6 +127,9 @@ flowchart LR
 - **Un seul appareil a changé ?** L'autre reprend son coffre, même verrouillé.
 - **Les deux ont changé ?** Le téléphone fusionne entrée par entrée au déverrouillage : la
   version la plus récente gagne, l'autre rejoint l'historique de l'entrée. Rien n'est perdu.
+- **À la demande** : « Synchroniser maintenant », sur le téléphone ou sur le PC (qui appelle
+  le téléphone où KeePlus est ouvert), fait l'aller-retour complet et dit si les deux coffres
+  sont identiques.
 - **Le téléphone fait le relais** : il porte les modifications d'un PC à l'autre.
 - **Seulement à la maison** : hors des réseaux enregistrés, rien n'est tenté, et le PC
   n'écoute pas.

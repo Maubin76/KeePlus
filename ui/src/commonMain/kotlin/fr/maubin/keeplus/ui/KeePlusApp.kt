@@ -76,7 +76,9 @@ fun KeePlusApp(
 						inBusy     = inController.busy,
 						inOnCreate = inController::startCreate,
 						inOnImport = { vScope.launch { inController.startImport() } },
-						inOnDemo   = { vScope.launch { inController.openDemo() } }
+						inOnDemo   = { vScope.launch { inController.openDemo() } },
+						inFolder   = inController.vaultFolder.takeIf { inController.vaultMovable },
+						inOnFolder = { vScope.launch { inController.chooseVaultFolder()?.let(inController::announce) } }
 					)
 					AppScreen.Create -> CreateScreen(
 						inError    = inController.error,

@@ -6,6 +6,9 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.net.Uri
 import android.os.Bundle
+import android.os.Environment
+import android.provider.DocumentsContract
+import android.provider.Settings
 import android.provider.OpenableColumns
 import android.view.WindowManager
 import androidx.activity.SystemBarStyle
@@ -38,12 +41,17 @@ import java.io.File
 /*
 	Activité unique de KeePlus. Écran protégé (FLAG_SECURE) : ni capture, ni
 	aperçu dans les applications récentes. Le coffre est dans le stockage
-	privé de l'appli, inaccessible aux autres applis.
+	privé de l'appli, inaccessible aux autres applis, sauf si l'utilisateur
+	choisit un autre dossier (avec l'accès à tous les fichiers).
 	Verrouillage : écran éteint (aussitôt), appli en arrière-plan (au-delà du
 	délai de grâce, voir AppController). Le coffre ouvert est prêté à
 	l'auto-remplissage dans les mêmes délais (voir VaultSession).
 	fPending    : choix de fichier en attente du sélecteur
 	fPicker     : sélecteur de documents du système
+	fFolder     : choix de dossier en attente du sélecteur
+	fFolders    : sélecteur de dossiers du système
+	fAccess     : retour de la page « Accès à tous les fichiers » attendu
+	fAccessPage : page des réglages d'Android « Accès à tous les fichiers »
 	fController : état de l'appli
 	fScreenOff  : écoute de l'extinction de l'écran
 	fSync       : synchronisation avec les PC
@@ -52,6 +60,10 @@ class MainActivity : FragmentActivity(), VaultFiles
 {
 	private var fPending: CompletableDeferred<Uri?>? = null
 	private val fPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { inUri -> fPending?.complete(inUri) }
+	private var fFolder: CompletableDeferred<Uri?>? = null
+	private val fFolders = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { inUri -> fFolder?.complete(inUri) }
+	private var fAccess: CompletableDeferred<Unit>? = null
+	private val fAccessPage = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { fAccess?.complete(Unit) }
 	private lateinit var fController: AppController
 	private lateinit var fSync: AndroidSync
 	private val fScreenOff = object : BroadcastReceiver()
@@ -90,6 +102,7 @@ class MainActivity : FragmentActivity(), VaultFiles
 			fSettings  = SettingsStore(File(filesDir, "reglages.json")),
 			fUpdater   = AndroidUpdateInstaller(applicationContext)
 		)
+		fController.onDeleted = { fSync.forget() }
 		VaultSession.attach(fController)
 		registerReceiver(fScreenOff, IntentFilter(Intent.ACTION_SCREEN_OFF))
 		scheduleSync(this)
@@ -116,12 +129,14 @@ class MainActivity : FragmentActivity(), VaultFiles
 
 	/*
 		Retour au premier plan : verrouille si l'absence a été trop longue, puis
-		synchronise avec les PC de la maison.
+		synchronise avec les PC de la maison, et écoute leurs appels
+		(« Synchroniser maintenant » sur un PC).
 	*/
 	override fun onStart()
 	{
 		super.onStart()
 		fController.setHidden(false)
+		fSync.listenForCalls(true)
 		fSync.syncSoon()
 	}
 
@@ -136,11 +151,13 @@ class MainActivity : FragmentActivity(), VaultFiles
 	}
 
 	/*
-		Passage en arrière-plan : début du délai de grâce.
+		Passage en arrière-plan : début du délai de grâce, plus d'écoute des
+		appels des PC.
 	*/
 	override fun onStop()
 	{
 		super.onStop()
+		fSync.listenForCalls(false)
 		fController.setHidden(true)
 	}
 
@@ -170,5 +187,64 @@ class MainActivity : FragmentActivity(), VaultFiles
 			val vBytes = contentResolver.openInputStream(vUri)?.use { it.readBytes() } ?: error("Fichier illisible")	// contenu
 			PickedFile(vName, vBytes)
 		}
+	}
+
+	/*
+		Nom d'un dossier pour l'affichage : stockage privé de l'appli, ou
+		chemin dans le stockage du téléphone.
+		inFolder : dossier
+	*/
+	override fun folderLabel(inFolder: File): String
+	{
+		val vPhone = Environment.getExternalStorageDirectory().absolutePath						// racine du stockage du téléphone
+		return when
+		{
+			inFolder.absoluteFile == filesDir.absoluteFile -> "Stockage privé de KeePlus"
+			inFolder.absolutePath.startsWith(vPhone)       -> "Téléphone" + inFolder.absolutePath.removePrefix(vPhone)
+			else                                           -> inFolder.absolutePath
+		}
+	}
+
+	/*
+		Choix du dossier du coffre : l'accès à tous les fichiers est d'abord
+		demandé (page des réglages d'Android), puis le sélecteur de dossiers
+		du système s'ouvre ; le dossier choisi est converti en chemin. Rend
+		null si annulé.
+	*/
+	override suspend fun pickFolder(): File?
+	{
+		if (!Environment.isExternalStorageManager())
+		{
+			val vBack = CompletableDeferred<Unit>().also { fAccess = it }						// retour de la page des réglages
+			fAccessPage.launch(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:$packageName")))
+			vBack.await()
+			if (!Environment.isExternalStorageManager()) error("Autorisez l'accès à tous les fichiers pour ranger le coffre dans le dossier de votre choix.")
+		}
+		val vPending = CompletableDeferred<Uri?>().also { fFolder = it }						// réponse attendue
+		fFolders.launch(null)
+		val vUri     = vPending.await() ?: return null										// dossier choisi
+		return treeFolder(vUri) ?: error("Choisissez un dossier du stockage du téléphone ou de la carte SD.")
+	}
+}
+
+/*
+	Chemin d'un dossier choisi dans le sélecteur de dossiers : stockage du
+	téléphone (« primary:Documents/KeePlus ») ou carte SD (« 1234-ABCD:… ») ;
+	null pour un autre fournisseur (Drive…), sans chemin réel.
+	inUri : dossier choisi
+*/
+private fun treeFolder(inUri: Uri): File?
+{
+	val vId = runCatching { DocumentsContract.getTreeDocumentId(inUri) }.getOrNull() ?: return null	// identifiant du dossier
+	return when (inUri.authority)
+	{
+		"com.android.externalstorage.documents"     -> {
+			val vVolume = vId.substringBefore(':')														// volume
+			val vPath   = vId.substringAfter(':', "")													// chemin dans le volume
+			val vRoot   = if (vVolume.equals("primary", ignoreCase = true)) Environment.getExternalStorageDirectory() else File("/storage", vVolume)	// racine du volume
+			if (vPath.isEmpty()) vRoot else File(vRoot, vPath)
+		}
+		"com.android.providers.downloads.documents" -> if (vId.startsWith("raw:")) File(vId.removePrefix("raw:")) else null
+		else                                        -> null
 	}
 }

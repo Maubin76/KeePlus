@@ -39,7 +39,9 @@ import fr.maubin.keeplus.ui.theme.logoImage
 import fr.maubin.keeplus.sync.PcSync
 import fr.maubin.keeplus.settings.SettingsStore
 import fr.maubin.keeplus.vault.VaultBackups
+import fr.maubin.keeplus.vault.VaultLocation
 import fr.maubin.keeplus.vault.VaultStore
+import fr.maubin.keeplus.vault.kVaultFileName
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -49,7 +51,9 @@ import java.awt.Dimension
 import java.awt.FileDialog
 import java.awt.Frame
 import java.io.File
+import javax.swing.JFileChooser
 import javax.swing.SwingUtilities
+import javax.swing.UIManager
 import kotlin.system.exitProcess
 
 /*
@@ -60,8 +64,8 @@ fun dataDir(): File =
 	System.getenv("APPDATA")?.let { File(it, "KeePlus") } ?: File(System.getProperty("user.home"), ".keeplus")
 
 /*
-	Sélecteur de coffre du PC : boîte de dialogue « Ouvrir » de Windows,
-	limitée aux fichiers .kdbx.
+	Sélecteurs de fichiers du PC : boîte de dialogue « Ouvrir » de Windows,
+	limitée aux fichiers .kdbx, et choix d'un dossier (emplacement du coffre).
 */
 class DesktopFiles : VaultFiles
 {
@@ -80,10 +84,24 @@ class DesktopFiles : VaultFiles
 		} ?: return null																	// fichier choisi
 		return withContext(Dispatchers.IO) { PickedFile(vChosen.name, vChosen.readBytes()) }
 	}
+
+	/*
+		Ouvre le choix d'un dossier, à l'allure de Windows ; null si annulé.
+	*/
+	override suspend fun pickFolder(): File? = withContext(Dispatchers.Main) {
+		runCatching { UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName()) }
+		val vChooser = JFileChooser().apply {
+			dialogTitle               = "Choisir le dossier du coffre"
+			fileSelectionMode         = JFileChooser.DIRECTORIES_ONLY
+			isAcceptAllFileFilterUsed = false
+		}																					// boîte de dialogue (modale)
+		if (vChooser.showDialog(null, "Choisir ce dossier") == JFileChooser.APPROVE_OPTION) vChooser.selectedFile else null
+	}
 }
 
 /*
-	Point d'entrée de l'appli PC : coffre dans %APPDATA%\KeePlus\coffre.kdbx.
+	Point d'entrée de l'appli PC : coffre dans %APPDATA%\KeePlus\coffre.kdbx,
+	ou dans le dossier choisi dans les réglages (renvoi emplacement.txt).
 	Une seule instance (une seconde la ramène au premier plan). Fermer la
 	fenêtre garde l'appli dans la zone de notification (pour la
 	synchronisation avec le téléphone) ; « Quitter » dans le menu de l'icône
@@ -104,7 +122,9 @@ fun main(inArgs: Array<String>)
 	if (!vInstance.claim(inNotify = !vStartup)) exitProcess(0)
 	application {
 		val vScope      = rememberCoroutineScope()												// rechargement après une synchronisation
-		val vStore      = remember { VaultStore(File(dataDir(), "coffre.kdbx"), VaultBackups(backupDir(), 7)) }	// coffre du PC et ses sauvegardes
+		val vStore      = remember {
+			VaultStore(VaultLocation(File(dataDir(), kVaultFileName), File(dataDir(), "emplacement.txt")), VaultBackups(backupDir(), 7))
+		}																						// coffre du PC et ses sauvegardes
 		val vController = remember {
 			AppController(
 				fStore    = vStore,
@@ -126,7 +146,10 @@ fun main(inArgs: Array<String>)
 				fOnStored  = { vScope.launch { vController.reloadFromDisk() } }
 			)
 		}																						// synchronisation avec les téléphones
-		DisposableEffect(vSync) { onDispose { vSync.stop() } }
+		DisposableEffect(vSync) {
+			vController.onDeleted = { vSync.state.value.phones.forEach { vSync.removePhone(it.id) } }
+			onDispose { vSync.stop() }
+		}
 		LaunchedEffect(vSync) {
 			while (true)
 			{

@@ -10,6 +10,7 @@ import android.os.Build
 import android.provider.Settings
 import fr.maubin.keeplus.link.NetworkId
 import fr.maubin.keeplus.link.PairingOffer
+import fr.maubin.keeplus.link.SyncCallListener
 import fr.maubin.keeplus.link.discoverPcs
 import fr.maubin.keeplus.link.isHomeNetwork
 import fr.maubin.keeplus.sync.PendingMerge
@@ -17,7 +18,9 @@ import fr.maubin.keeplus.sync.PhonePeers
 import fr.maubin.keeplus.sync.PhoneSync
 import fr.maubin.keeplus.ui.SyncHooks
 import fr.maubin.keeplus.vault.VaultBackups
+import fr.maubin.keeplus.vault.VaultLocation
 import fr.maubin.keeplus.vault.VaultStore
+import fr.maubin.keeplus.vault.kVaultFileName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -27,13 +30,16 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 
 private const val kChangeDelay = 3_000L													// synchronisation après un enregistrement (ms)
+private const val kMergeWaitMs = 15_000L													// attente de la fusion par l'appli, synchronisation complète (ms)
 
 /*
 	Réseau du téléphone, tel que la synchronisation le voit.
@@ -79,13 +85,17 @@ fun currentPhoneNetwork(inContext: Context): PhoneNetwork
 }
 
 /*
-	Accès au coffre du téléphone (stockage privé) et à ses sauvegardes. Un
+	Accès au coffre du téléphone (stockage privé, ou dossier choisi) et à
+	ses sauvegardes. Un
 	accès distinct retient son propre dernier coffre lu ou écrit : celui de
 	l'auto-remplissage ne se confond pas avec celui de l'appli.
 	inContext : contexte
 */
 fun phoneStore(inContext: Context): VaultStore =
-	VaultStore(File(inContext.filesDir, "coffre.kdbx"), VaultBackups(File(inContext.filesDir, "sauvegardes"), 3))
+	VaultStore(
+		VaultLocation(File(inContext.filesDir, kVaultFileName), File(inContext.filesDir, "emplacement.txt")),
+		VaultBackups(File(inContext.filesDir, "sauvegardes"), 3)
+	)
 
 /*
 	Nom du téléphone : celui donné dans les réglages d'Android, sinon le modèle.
@@ -163,6 +173,11 @@ class AndroidSync private constructor(
 	private val fStatus  = MutableStateFlow<PhoneStatus>(initialStatus())					// état
 	private val fPeers   = MutableStateFlow(fEngine.peers())								// appareils
 	private val fChanged = MutableSharedFlow<Unit>(extraBufferCapacity = 4)					// coffre remplacé ou coffre en attente
+	private val fSaves   = MutableStateFlow(0)													// enregistrements du coffre par l'appli (compteur)
+	private var fFull    : Job? = null														// synchronisation complète en cours
+	private val fCalls   = SyncCallListener { inPcId ->
+		if (fEngine.peers().pcs.any { it.id == inPcId }) fScope.launch { syncFully() }
+	}																						// écoute des appels des PC appairés
 
 	/*
 		État de la synchronisation.
@@ -209,6 +224,16 @@ class AndroidSync private constructor(
 	}
 
 	/*
+		Oublie tous les PC appairés (coffre supprimé).
+	*/
+	fun forget()
+	{
+		fEngine.peers().pcs.forEach { fEngine.remove(it.id) }
+		refreshPeers()
+		fStatus.value = initialStatus()
+	}
+
+	/*
 		Retire un réseau familial.
 		inNetwork : réseau
 	*/
@@ -228,6 +253,42 @@ class AndroidSync private constructor(
 		refreshPeers()
 		fStatus.value = initialStatus()
 		if (inOn) fScope.launch { sync() }
+	}
+
+	/*
+		Synchronisation complète, à la demande (bouton, appel d'un PC) : échange
+		avec chaque PC ; si un PC a aussi changé, attente de la fusion par
+		l'appli (coffre ouvert) et de son enregistrement, puis renvoi aussitôt.
+		Rend l'état final : « à jour », ou la raison (fusion au prochain
+		déverrouillage, PC injoignable…). Un second appel pendant la première
+		attend simplement son résultat.
+	*/
+	suspend fun syncFully(): PhoneStatus
+	{
+		val vJob = fFull?.takeIf { it.isActive } ?: fScope.launch {
+			val vSaves = fSaves.value																// enregistrements avant l'échange
+			if (sync() != PhoneStatus.Pending) return@launch
+			val vMerged = withTimeoutOrNull(kMergeWaitMs) {
+				fSaves.first { it > vSaves && fEngine.pending().isEmpty() }
+			}																						// fusion faite et enregistrée ; null sinon
+			if (vMerged != null)
+			{
+				fSoon?.cancel()
+				sync()
+			}
+		}.also { fFull = it }																	// synchronisation complète
+		vJob.join()
+		return fStatus.value
+	}
+
+	/*
+		Écoute ou non les appels des PC (« synchronisez-vous ») : seulement
+		tant que l'appli est à l'écran.
+		inOn : vrai pour écouter
+	*/
+	fun listenForCalls(inOn: Boolean)
+	{
+		if (inOn) runCatching { fCalls.start() } else fCalls.stop()
 	}
 
 	/*
@@ -299,6 +360,7 @@ class AndroidSync private constructor(
 	*/
 	override fun changed()
 	{
+		fSaves.value += 1
 		fSoon?.cancel()
 		fSoon = fScope.launch {
 			delay(kChangeDelay)
