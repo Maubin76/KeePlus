@@ -61,6 +61,13 @@ class AutofillTarget private constructor(
 			inPackage : String,
 			inDomain  : String?
 		): AutofillTarget = AutofillTarget(inPackage, inDomain?.takeIf { inPackage in kBrowsers }?.let(::hostOf))
+
+		/*
+			Cible d'un site dont le domaine est déjà sûr (lu dans la barre
+			d'adresse d'un navigateur, sur PC).
+			inDomain : domaine ou adresse du site
+		*/
+		fun web(inDomain: String): AutofillTarget = AutofillTarget("web", hostOf(inDomain))
 	}
 }
 
@@ -153,3 +160,11 @@ internal fun hostOf(inUrl: String): String?
 		.lowercase(Locale.ROOT).trimEnd('.').removePrefix("www.")							// domaine
 	return vHost.takeIf { '.' in it && it.none { vChar -> vChar.isWhitespace() } }
 }
+
+/*
+	Titres portés par plusieurs comptes d'une liste (sans tenir compte des
+	majuscules) : pour ces comptes, l'identifiant passe en avant.
+	inItems : comptes
+*/
+fun sharedTitles(inItems: List<VaultItem>): Set<String> =
+	inItems.groupBy { it.title.trim().lowercase() }.filterValues { it.size > 1 }.values.flatten().map { it.title }.toSet()

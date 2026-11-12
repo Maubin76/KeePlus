@@ -26,6 +26,11 @@ import fr.maubin.keeplus.ui.KeePlusApp
 import fr.maubin.keeplus.ui.PickedFile
 import fr.maubin.keeplus.ui.VaultFiles
 import fr.maubin.keeplus.ui.theme.KeeColors
+import fr.maubin.keeplus.desktop.quick.ActiveWindow
+import fr.maubin.keeplus.desktop.quick.Hotkey
+import fr.maubin.keeplus.desktop.quick.QuickRequest
+import fr.maubin.keeplus.desktop.quick.QuickWindow
+import fr.maubin.keeplus.desktop.quick.WinBridge
 import fr.maubin.keeplus.desktop.update.DesktopUpdateInstaller
 import fr.maubin.keeplus.desktop.update.appFolder
 import fr.maubin.keeplus.desktop.update.appVersion
@@ -44,6 +49,7 @@ import java.awt.Dimension
 import java.awt.FileDialog
 import java.awt.Frame
 import java.io.File
+import javax.swing.SwingUtilities
 import kotlin.system.exitProcess
 
 /*
@@ -88,6 +94,8 @@ class DesktopFiles : VaultFiles
 	(réseau relu toutes les 30 s). Une nouvelle version publiée est proposée
 	après le déverrouillage ; pour l'installer, l'appli se ferme vraiment (fin
 	du processus) et un script remplace son dossier.
+	Sous Windows, le raccourci global réglé (Ctrl+Maj+Espace par défaut)
+	ouvre la carte de saisie en haut de l'écran, pour la fenêtre active.
 */
 fun main(inArgs: Array<String>)
 {
@@ -137,6 +145,51 @@ fun main(inArgs: Array<String>)
 			snapshotFlow { !vVisible || vWindow.isMinimized }.collect { vController.setHidden(it) }	// absence : délai de grâce
 		}
 		LaunchedEffect(Unit) { SessionWatch.watch { vController.lock() } }
+		var vQuick      by remember { mutableStateOf<QuickRequest?>(null) }						// carte de saisie affichée ; null sans
+		var vSerial     by remember { mutableStateOf(0) }										// numéro de la dernière demande
+		var vHotkeyOk   by remember { mutableStateOf(true) }									// raccourci accepté par Windows
+		var vDismiss    by remember { mutableStateOf(0) }										// Échap appuyée hors de la carte
+		val vBridge     = remember {
+			if (WinBridge.available) WinBridge(
+				fOnHotkey = {
+					val vActive = ActiveWindow.current()												// fenêtre active, lue tout de suite
+					if (!vActive.isOwn) SwingUtilities.invokeLater {
+						vSerial += 1
+						vController.setHidden(false)
+						vQuick = QuickRequest(vActive, vActive.target, vSerial)
+					}
+				},
+				fOnEscape = { SwingUtilities.invokeLater { vDismiss += 1 } }
+			).also { it.start() } else null
+		}																						// raccourci global et presse-papiers enchaîné (Windows)
+		LaunchedEffect(vController.settings.quickHotkey) {
+			val vHotkey = Hotkey.parse(vController.settings.quickHotkey)							// raccourci réglé
+			vHotkeyOk   = withContext(Dispatchers.IO) { vBridge?.register(vHotkey.modifiers, vHotkey.key) ?: true }
+		}
+		LaunchedEffect(vQuick != null) { vBridge?.escape(vQuick != null) }
+		LaunchedEffect(vQuick?.serial) {
+			val vRequest = vQuick ?: return@LaunchedEffect											// demande en cours
+			if (!vRequest.target.isBrowser) return@LaunchedEffect
+			val vUrl     = withContext(Dispatchers.IO) { vRequest.active.readUrl() }				// adresse du site
+			if (vUrl != null && vQuick?.serial == vRequest.serial) vQuick = vRequest.copy(target = vRequest.target.withUrl(vUrl))
+		}
+		QuickWindow(
+			inRequest    = vQuick,
+			inController = vController,
+			inOnResult   = { vResult ->
+				vBridge?.offer(vResult.sequence, vController.settings.clipboardSeconds)
+				vResult.change?.let { vChange -> vScope.launch { vController.edit(vChange) } }
+			},
+			inOnClosed   = { vRestore ->
+				val vRequest = vQuick																		// demande fermée
+				vQuick = null
+				if (vRestore) vRequest?.active?.restore()
+				if (!vVisible) vController.setHidden(true)
+			},
+			inOnOpenApp  = { vVisible = true },
+			inIcon       = vIcon,
+			inDismiss    = vDismiss
+		)
 		Tray(
 			icon     = vIcon,
 			state    = vTray,
@@ -173,7 +226,14 @@ fun main(inArgs: Array<String>)
 			}
 			KeePlusApp(
 				inController = vController,
-				inSettings   = { DesktopSettings(vController.backupFolder) },
+				inSettings   = {
+					DesktopSettings(
+						inBackups  = vController.backupFolder,
+						inHotkey   = vController.settings.quickHotkey.takeIf { vBridge != null },
+						inHotkeyOk = vHotkeyOk,
+						inOnHotkey = { vController.updateSettings(vController.settings.copy(quickHotkey = it)) }
+					)
+				},
 				inDevices    = { DevicesPanel(vSync) { vController.showDevices = false } }
 			)
 		}
