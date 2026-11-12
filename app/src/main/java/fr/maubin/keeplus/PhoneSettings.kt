@@ -8,6 +8,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -18,6 +19,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import fr.maubin.keeplus.ui.AppController
+import fr.maubin.keeplus.ui.components.FilterPill
 import fr.maubin.keeplus.ui.components.GhostButton
 import fr.maubin.keeplus.ui.screens.ErrorLine
 import fr.maubin.keeplus.ui.screens.SettingsSection
@@ -34,10 +37,15 @@ import java.time.LocalDate
 	choisi (carte, clé USB, dossier partagé), pour le garder hors du
 	téléphone. Le fichier exporté s'ouvre avec KeePlus, KeePassDX ou
 	KeePassXC et le mot de passe maître.
-	inStore : coffre du téléphone
+	Animation d'ouverture : jouée ou non au lancement.
+	inStore      : coffre du téléphone
+	inController : état de l'appli (réglages)
 */
 @Composable
-fun PhoneSettings(inStore: VaultStore)
+fun PhoneSettings(
+	inStore      : VaultStore,
+	inController : AppController
+)
 {
 	val vType    = keeType()																	// styles de texte
 	val vContext = LocalContext.current														// accès aux documents
@@ -58,6 +66,13 @@ fun PhoneSettings(inStore: VaultStore)
 		}
 	}																						// choix du fichier d'export
 	AutofillSettings()
+	SettingsSection("Animation d'ouverture") {
+		val vSettings = inController.settings												// réglages
+		Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+			FilterPill("Activée", vSettings.launchIntro) { inController.updateSettings(vSettings.copy(launchIntro = true)) }
+			FilterPill("Désactivée", !vSettings.launchIntro) { inController.updateSettings(vSettings.copy(launchIntro = false)) }
+		}
+	}
 	SettingsSection("Export") {
 		vResult?.let { BasicText(it, style = vType.body.copy(color = KeeColors.success)) }
 		ErrorLine(vError)

@@ -11,18 +11,21 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import fr.maubin.keeplus.ui.icons.LineIcons
 import fr.maubin.keeplus.ui.theme.KeeColors
 import fr.maubin.keeplus.ui.theme.keeType
 import fr.maubin.keeplus.vault.VaultItem
 
 private val kLengths = 8..64																	// longueurs proposées (comme le générateur de l'appli)
+private val kMinPasswordSize = 6.sp																// taille minimale du mot de passe généré (64 caractères sur une ligne de téléphone)
 
 /*
 	Ligne d'un compte (cartes de saisie, téléphone et PC) : monogramme, titre, identifiant. Quand plusieurs
@@ -66,7 +69,8 @@ fun AccountRow(
 
 /*
 	Mot de passe généré (cartes de saisie, téléphone et PC) : libellé, mot de passe coloré (lettres, chiffres,
-	symboles, sur plusieurs lignes s'il est long), bouton de nouveau tirage,
+	symboles) toujours sur une ligne, en caractères d'autant plus petits qu'il
+	est long (la carte garde sa hauteur quand la longueur change), bouton de nouveau tirage,
 	curseur de longueur (un nouveau mot de passe est tiré à chaque cran).
 	inLabel    : libellé
 	inValue    : mot de passe
@@ -90,7 +94,13 @@ fun GeneratedPassword(
 			Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(KeeColors.void.copy(alpha = 0.6f)).padding(start = 14.dp),
 			verticalAlignment = Alignment.CenterVertically
 		) {
-			BasicText(secretAnnotated(inValue), Modifier.weight(1f).padding(vertical = 8.dp), style = vType.secret)
+			BasicText(
+				secretAnnotated(inValue),
+				Modifier.weight(1f).padding(vertical = 8.dp),
+				style    = vType.secret,
+				maxLines = 1,
+				autoSize = TextAutoSize.StepBased(minFontSize = kMinPasswordSize, maxFontSize = vType.secret.fontSize, stepSize = 0.5.sp)
+			)
 			IconAction(LineIcons.Refresh, "Nouveau tirage", inOnDraw)
 		}
 		Stepper("Longueur", inLength, kLengths) { if (it != inLength) inOnLength(it) }

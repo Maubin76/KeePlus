@@ -112,14 +112,15 @@ class MainActivity : FragmentActivity(), VaultFiles
 				fController.mergePending()
 			}
 		}																						// coffre remplacé ou en attente de fusion
-		fController.introPlaying = inState == null
+		val vPlayIntro = inState == null && fController.settings.launchIntro						// animation d'ouverture à jouer (lancement, réglage)
+		fController.introPlaying = vPlayIntro
 		setContent {
-			var vIntro by remember { mutableStateOf(inState == null) }							// animation d'ouverture affichée
+			var vIntro by remember { mutableStateOf(vPlayIntro) }								// animation d'ouverture affichée
 			BackHandler(enabled = fController.canGoBack) { fController.back() }
 			Box(Modifier.fillMaxSize()) {
 				KeePlusApp(
 					inController = fController,
-					inSettings   = { PhoneSettings(fSync.fStore) },
+					inSettings   = { PhoneSettings(fSync.fStore, fController) },
 					inDevices    = { DevicesScreen(fSync) { fController.showDevices = false } }
 				)
 				if (vIntro) LaunchIntro(inOnFaded = { fController.introPlaying = false }, inOnDone = { vIntro = false })
