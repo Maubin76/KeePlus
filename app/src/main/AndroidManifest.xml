@@ -5,7 +5,8 @@
      nom du Wi-Fi, jamais d'une position) ; appareil photo : lecture du QR code d'appairage ;
      vibreur : choc de l'animation d'ouverture ; installation de paquets : mises à jour publiées sur GitHub.
      Aucune autorisation pour l'auto-remplissage : c'est l'utilisateur qui choisit KeePlus dans Android. -->
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:tools="http://schemas.android.com/tools">
 
 	<uses-permission android:name="android.permission.INTERNET" />
 	<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
@@ -15,6 +16,8 @@
 	<uses-permission android:name="android.permission.CAMERA" />
 	<uses-permission android:name="android.permission.VIBRATE" />
 	<uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+	<!-- Coffre rangé dans un dossier choisi par l'utilisateur (hors stockage privé) -->
+	<uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" tools:ignore="ScopedStorage" />
 	<uses-feature android:name="android.hardware.camera" android:required="false" />
 
 	<!-- Auto-remplissage : noms des applis de l'écran d'accueil, pour montrer « Ma Banque » plutôt

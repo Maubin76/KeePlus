@@ -64,6 +64,9 @@ import fr.maubin.keeplus.ui.components.OneLine
 import fr.maubin.keeplus.ui.components.SearchField
 import fr.maubin.keeplus.ui.components.KeeTextField
 import fr.maubin.keeplus.ui.components.SecretField
+import fr.maubin.keeplus.autofill.sharedTitles
+import fr.maubin.keeplus.ui.components.AccountRow
+import fr.maubin.keeplus.ui.components.GeneratedPassword
 import fr.maubin.keeplus.ui.components.SilverButton
 import fr.maubin.keeplus.ui.components.Stepper
 import fr.maubin.keeplus.ui.components.TextLink
@@ -79,7 +82,6 @@ import kotlinx.coroutines.launch
 import java.util.UUID
 
 private val kCardShape  = RoundedCornerShape(36.dp)											// carte aux coins très arrondis
-private val kLengths     = 8..64																// longueurs proposées (comme le générateur de l'appli)
 private const val kScrim = 0.18f																	// voile sur l'appli, carte affichée
 private const val kOutMs = 220																		// durée de la sortie (ms)
 
@@ -437,78 +439,8 @@ private fun PickerPart(
 	}
 	LazyColumn(Modifier.fillMaxWidth().heightIn(max = 300.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
 		items(vItems, key = { it.id }) { vItem ->
-			PickerRow(vItem, vItem.title in vShared) { inOnPick(inVault, vItem.id, vRemember && vItem !in vMatches) }
+			AccountRow(vItem, vItem.title in vShared) { inOnPick(inVault, vItem.id, vRemember && vItem !in vMatches) }
 		}
-	}
-}
-
-/*
-	Ligne d'un compte : monogramme, titre, identifiant. Quand plusieurs
-	comptes de la liste portent le même titre (plusieurs comptes pour une
-	même appli), l'identifiant passe en avant (ligne principale et
-	monogramme) : c'est lui qui les distingue.
-	inItem      : entrée
-	inUserFirst : identifiant en avant
-	inOnClick   : choix du compte
-*/
-@Composable
-private fun PickerRow(
-	inItem      : VaultItem,
-	inUserFirst : Boolean = false,
-	inOnClick   : () -> Unit
-)
-{
-	val vType = keeType()																		// styles de texte
-	Row(
-		Modifier
-			.fillMaxWidth()
-			.clip(RoundedCornerShape(16.dp))
-			.clickable(onClick = inOnClick)
-			.padding(horizontal = 4.dp, vertical = 8.dp),
-		verticalAlignment = Alignment.CenterVertically
-	) {
-		val vTitle = inItem.title.ifBlank { "Sans titre" }											// titre
-		val vUser  = inUserFirst && inItem.userName.isNotBlank()									// identifiant en avant
-		Monogram(if (vUser) inItem.userName else inItem.title, inSize = 40.dp)
-		Spacer(Modifier.width(14.dp))
-		Column(Modifier.weight(1f)) {
-			OneLine(if (vUser) inItem.userName else vTitle, vType.title)
-			val vDetail = if (vUser) vTitle else inItem.userName									// seconde ligne
-			if (vDetail.isNotBlank()) OneLine(vDetail, vType.bodySmall)
-		}
-	}
-}
-
-/*
-	Mot de passe généré : libellé, mot de passe coloré (lettres, chiffres,
-	symboles, sur plusieurs lignes s'il est long), bouton de nouveau tirage,
-	curseur de longueur (un nouveau mot de passe est tiré à chaque cran).
-	inLabel    : libellé
-	inValue    : mot de passe
-	inLength   : longueur demandée
-	inOnLength : nouvelle longueur
-	inOnDraw   : nouveau tirage
-*/
-@Composable
-private fun GeneratedPassword(
-	inLabel    : String,
-	inValue    : String,
-	inLength   : Int,
-	inOnLength : (Int) -> Unit,
-	inOnDraw   : () -> Unit
-)
-{
-	val vType = keeType()																		// styles de texte
-	Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-		BasicText(inLabel, style = vType.label)
-		Row(
-			Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(KeeColors.void.copy(alpha = 0.6f)).padding(start = 14.dp),
-			verticalAlignment = Alignment.CenterVertically
-		) {
-			BasicText(secretAnnotated(inValue), Modifier.weight(1f).padding(vertical = 8.dp), style = vType.secret)
-			IconAction(LineIcons.Refresh, "Nouveau tirage", inOnDraw)
-		}
-		Stepper("Longueur", inLength, kLengths) { if (it != inLength) inOnLength(it) }
 	}
 }
 
@@ -584,7 +516,7 @@ private fun ChangePart(
 	var vOptions  by remember { mutableStateOf(PasswordOptions()) }							// réglages du générateur
 	var vPassword by remember { mutableStateOf(generatePassword(vOptions)) }				// nouveau mot de passe
 	Row(verticalAlignment = Alignment.CenterVertically) {
-		Box(Modifier.weight(1f)) { vItem?.let { vAccount -> PickerRow(vAccount) {} } }
+		Box(Modifier.weight(1f)) { vItem?.let { vAccount -> AccountRow(vAccount) {} } }
 		TextLink("Autre compte", inOnOther)
 	}
 	Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -690,11 +622,3 @@ fun SaveCard(
 		}
 	}
 }
-
-/*
-	Titres portés par plusieurs comptes d'une liste (sans tenir compte des
-	majuscules).
-	inItems : comptes
-*/
-internal fun sharedTitles(inItems: List<VaultItem>): Set<String> =
-	inItems.groupBy { it.title.trim().lowercase() }.filterValues { it.size > 1 }.values.flatten().map { it.title }.toSet()

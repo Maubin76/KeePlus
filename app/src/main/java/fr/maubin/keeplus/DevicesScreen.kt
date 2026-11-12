@@ -36,6 +36,7 @@ import fr.maubin.keeplus.sync.PairedPc
 import fr.maubin.keeplus.ui.components.keeTexture
 import fr.maubin.keeplus.ui.components.FilterPill
 import fr.maubin.keeplus.ui.components.keeTexture
+import fr.maubin.keeplus.ui.components.GhostButton
 import fr.maubin.keeplus.ui.components.IconAction
 import fr.maubin.keeplus.ui.components.keeTexture
 import fr.maubin.keeplus.ui.components.Monogram
@@ -57,7 +58,8 @@ import java.util.Locale
 private val kWhen = DateTimeFormatter.ofPattern("d MMMM 'à' HH:mm", Locale.FRENCH)	// date de dernière synchronisation
 
 /*
-	Page Appareils du téléphone : état de la synchronisation, PC appairés,
+	Page Appareils du téléphone : état de la synchronisation et
+	synchronisation complète à la demande, PC appairés,
 	appairage d'un PC (autorisation de localisation pour reconnaître le
 	Wi-Fi, puis lecture du QR code), réseaux de la maison, interrupteur.
 	inSync    : synchronisation du téléphone
@@ -79,6 +81,7 @@ fun DevicesScreen(
 	var vError   by remember { mutableStateOf<String?>(null) }									// échec de l'appairage
 	var vBusy    by remember { mutableStateOf(false) }											// appairage en cours
 	var vRemove  by remember { mutableStateOf<PairedPc?>(null) }								// PC à retirer
+	var vSyncing by remember { mutableStateOf(false) }											// synchronisation complète en cours
 	val vAskWifi = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { vGranted ->
 		if (vGranted) vScan = true else vError = "Sans la localisation, KeePlus ne peut pas reconnaître le Wi-Fi de la maison."
 	}																						// autorisation de lire le nom du Wi-Fi
@@ -106,9 +109,13 @@ fun DevicesScreen(
 			IconAction(LineIcons.Back, "Retour", inOnClose, inTint = KeeColors.text)
 			BasicText("Appareils", Modifier.weight(1f).padding(start = 4.dp), style = vType.headline)
 		}
-		Row(verticalAlignment = Alignment.CenterVertically) {
-			BasicText(statusText(vStatus).orEmpty(), Modifier.weight(1f), style = vType.bodySmall.copy(color = if (vStatus is PhoneStatus.Failed) KeeColors.danger else KeeColors.textMuted))
-			if (vPeers.enabled && vPeers.pcs.isNotEmpty()) IconAction(LineIcons.Sync, "Synchroniser maintenant", { inSync.syncSoon() }, inTint = KeeColors.text)
+		statusText(vStatus)?.let { BasicText(it, style = vType.bodySmall.copy(color = if (vStatus is PhoneStatus.Failed) KeeColors.danger else KeeColors.textMuted)) }
+		if (vPeers.enabled && vPeers.pcs.isNotEmpty())
+		{
+			GhostButton(if (vSyncing || vStatus == PhoneStatus.Working) "Synchronisation…" else "Synchroniser maintenant", {
+				vSyncing = true
+				vScope.launch { inSync.syncFully(); vSyncing = false }
+			}, inEnabled = !vSyncing && vStatus != PhoneStatus.Working)
 		}
 
 		Section("PC") {

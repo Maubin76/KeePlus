@@ -26,6 +26,11 @@ import fr.maubin.keeplus.ui.KeePlusApp
 import fr.maubin.keeplus.ui.PickedFile
 import fr.maubin.keeplus.ui.VaultFiles
 import fr.maubin.keeplus.ui.theme.KeeColors
+import fr.maubin.keeplus.desktop.quick.ActiveWindow
+import fr.maubin.keeplus.desktop.quick.Hotkey
+import fr.maubin.keeplus.desktop.quick.QuickRequest
+import fr.maubin.keeplus.desktop.quick.QuickWindow
+import fr.maubin.keeplus.desktop.quick.WinBridge
 import fr.maubin.keeplus.desktop.update.DesktopUpdateInstaller
 import fr.maubin.keeplus.desktop.update.appFolder
 import fr.maubin.keeplus.desktop.update.appVersion
@@ -34,7 +39,9 @@ import fr.maubin.keeplus.ui.theme.logoImage
 import fr.maubin.keeplus.sync.PcSync
 import fr.maubin.keeplus.settings.SettingsStore
 import fr.maubin.keeplus.vault.VaultBackups
+import fr.maubin.keeplus.vault.VaultLocation
 import fr.maubin.keeplus.vault.VaultStore
+import fr.maubin.keeplus.vault.kVaultFileName
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -44,6 +51,9 @@ import java.awt.Dimension
 import java.awt.FileDialog
 import java.awt.Frame
 import java.io.File
+import javax.swing.JFileChooser
+import javax.swing.SwingUtilities
+import javax.swing.UIManager
 import kotlin.system.exitProcess
 
 /*
@@ -54,8 +64,8 @@ fun dataDir(): File =
 	System.getenv("APPDATA")?.let { File(it, "KeePlus") } ?: File(System.getProperty("user.home"), ".keeplus")
 
 /*
-	Sélecteur de coffre du PC : boîte de dialogue « Ouvrir » de Windows,
-	limitée aux fichiers .kdbx.
+	Sélecteurs de fichiers du PC : boîte de dialogue « Ouvrir » de Windows,
+	limitée aux fichiers .kdbx, et choix d'un dossier (emplacement du coffre).
 */
 class DesktopFiles : VaultFiles
 {
@@ -74,10 +84,24 @@ class DesktopFiles : VaultFiles
 		} ?: return null																	// fichier choisi
 		return withContext(Dispatchers.IO) { PickedFile(vChosen.name, vChosen.readBytes()) }
 	}
+
+	/*
+		Ouvre le choix d'un dossier, à l'allure de Windows ; null si annulé.
+	*/
+	override suspend fun pickFolder(): File? = withContext(Dispatchers.Main) {
+		runCatching { UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName()) }
+		val vChooser = JFileChooser().apply {
+			dialogTitle               = "Choisir le dossier du coffre"
+			fileSelectionMode         = JFileChooser.DIRECTORIES_ONLY
+			isAcceptAllFileFilterUsed = false
+		}																					// boîte de dialogue (modale)
+		if (vChooser.showDialog(null, "Choisir ce dossier") == JFileChooser.APPROVE_OPTION) vChooser.selectedFile else null
+	}
 }
 
 /*
-	Point d'entrée de l'appli PC : coffre dans %APPDATA%\KeePlus\coffre.kdbx.
+	Point d'entrée de l'appli PC : coffre dans %APPDATA%\KeePlus\coffre.kdbx,
+	ou dans le dossier choisi dans les réglages (renvoi emplacement.txt).
 	Une seule instance (une seconde la ramène au premier plan). Fermer la
 	fenêtre garde l'appli dans la zone de notification (pour la
 	synchronisation avec le téléphone) ; « Quitter » dans le menu de l'icône
@@ -88,6 +112,8 @@ class DesktopFiles : VaultFiles
 	(réseau relu toutes les 30 s). Une nouvelle version publiée est proposée
 	après le déverrouillage ; pour l'installer, l'appli se ferme vraiment (fin
 	du processus) et un script remplace son dossier.
+	Sous Windows, le raccourci global réglé (Ctrl+Maj+Espace par défaut)
+	ouvre la carte de saisie en haut de l'écran, pour la fenêtre active.
 */
 fun main(inArgs: Array<String>)
 {
@@ -96,7 +122,9 @@ fun main(inArgs: Array<String>)
 	if (!vInstance.claim(inNotify = !vStartup)) exitProcess(0)
 	application {
 		val vScope      = rememberCoroutineScope()												// rechargement après une synchronisation
-		val vStore      = remember { VaultStore(File(dataDir(), "coffre.kdbx"), VaultBackups(backupDir(), 7)) }	// coffre du PC et ses sauvegardes
+		val vStore      = remember {
+			VaultStore(VaultLocation(File(dataDir(), kVaultFileName), File(dataDir(), "emplacement.txt")), VaultBackups(backupDir(), 7))
+		}																						// coffre du PC et ses sauvegardes
 		val vController = remember {
 			AppController(
 				fStore    = vStore,
@@ -118,7 +146,10 @@ fun main(inArgs: Array<String>)
 				fOnStored  = { vScope.launch { vController.reloadFromDisk() } }
 			)
 		}																						// synchronisation avec les téléphones
-		DisposableEffect(vSync) { onDispose { vSync.stop() } }
+		DisposableEffect(vSync) {
+			vController.onDeleted = { vSync.state.value.phones.forEach { vSync.removePhone(it.id) } }
+			onDispose { vSync.stop() }
+		}
 		LaunchedEffect(vSync) {
 			while (true)
 			{
@@ -137,6 +168,51 @@ fun main(inArgs: Array<String>)
 			snapshotFlow { !vVisible || vWindow.isMinimized }.collect { vController.setHidden(it) }	// absence : délai de grâce
 		}
 		LaunchedEffect(Unit) { SessionWatch.watch { vController.lock() } }
+		var vQuick      by remember { mutableStateOf<QuickRequest?>(null) }						// carte de saisie affichée ; null sans
+		var vSerial     by remember { mutableStateOf(0) }										// numéro de la dernière demande
+		var vHotkeyOk   by remember { mutableStateOf(true) }									// raccourci accepté par Windows
+		var vDismiss    by remember { mutableStateOf(0) }										// Échap appuyée hors de la carte
+		val vBridge     = remember {
+			if (WinBridge.available) WinBridge(
+				fOnHotkey = {
+					val vActive = ActiveWindow.current()												// fenêtre active, lue tout de suite
+					if (!vActive.isOwn) SwingUtilities.invokeLater {
+						vSerial += 1
+						vController.setHidden(false)
+						vQuick = QuickRequest(vActive, vActive.target, vSerial)
+					}
+				},
+				fOnEscape = { SwingUtilities.invokeLater { vDismiss += 1 } }
+			).also { it.start() } else null
+		}																						// raccourci global et presse-papiers enchaîné (Windows)
+		LaunchedEffect(vController.settings.quickHotkey) {
+			val vHotkey = Hotkey.parse(vController.settings.quickHotkey)							// raccourci réglé
+			vHotkeyOk   = withContext(Dispatchers.IO) { vBridge?.register(vHotkey.modifiers, vHotkey.key) ?: true }
+		}
+		LaunchedEffect(vQuick != null) { vBridge?.escape(vQuick != null) }
+		LaunchedEffect(vQuick?.serial) {
+			val vRequest = vQuick ?: return@LaunchedEffect											// demande en cours
+			if (!vRequest.target.isBrowser) return@LaunchedEffect
+			val vUrl     = withContext(Dispatchers.IO) { vRequest.active.readUrl() }				// adresse du site
+			if (vUrl != null && vQuick?.serial == vRequest.serial) vQuick = vRequest.copy(target = vRequest.target.withUrl(vUrl))
+		}
+		QuickWindow(
+			inRequest    = vQuick,
+			inController = vController,
+			inOnResult   = { vResult ->
+				vBridge?.offer(vResult.sequence, vController.settings.clipboardSeconds)
+				vResult.change?.let { vChange -> vScope.launch { vController.edit(vChange) } }
+			},
+			inOnClosed   = { vRestore ->
+				val vRequest = vQuick																		// demande fermée
+				vQuick = null
+				if (vRestore) vRequest?.active?.restore()
+				if (!vVisible) vController.setHidden(true)
+			},
+			inOnOpenApp  = { vVisible = true },
+			inIcon       = vIcon,
+			inDismiss    = vDismiss
+		)
 		Tray(
 			icon     = vIcon,
 			state    = vTray,
@@ -173,7 +249,14 @@ fun main(inArgs: Array<String>)
 			}
 			KeePlusApp(
 				inController = vController,
-				inSettings   = { DesktopSettings(vController.backupFolder) },
+				inSettings   = {
+					DesktopSettings(
+						inBackups  = vController.backupFolder,
+						inHotkey   = vController.settings.quickHotkey.takeIf { vBridge != null },
+						inHotkeyOk = vHotkeyOk,
+						inOnHotkey = { vController.updateSettings(vController.settings.copy(quickHotkey = it)) }
+					)
+				},
 				inDevices    = { DevicesPanel(vSync) { vController.showDevices = false } }
 			)
 		}

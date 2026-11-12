@@ -12,6 +12,9 @@ import fr.maubin.keeplus.ui.screens.IntroFrame
 import fr.maubin.keeplus.ui.screens.IntroState
 import fr.maubin.keeplus.ui.screens.UnlockScreen
 import fr.maubin.keeplus.ui.screens.VaultScreen
+import fr.maubin.keeplus.ui.screens.VaultSettings
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
 import fr.maubin.keeplus.ui.screens.WelcomeScreen
 import fr.maubin.keeplus.ui.theme.KeePlusTheme
 import fr.maubin.keeplus.vault.VaultStore
@@ -104,10 +107,30 @@ class PreviewRenderTest
 	@Test
 	fun renderKeyScreens()
 	{
-		render("accueil") { WelcomeScreen(null, false, {}, {}, {}) }
+		render("accueil") { WelcomeScreen(null, false, {}, {}, {}, "C:\\Users\\camille\\AppData\\Roaming\\KeePlus") }
 		render("creation") { CreateScreen(null, false, {}, { _, _ -> null }, {}) }
 		render("deverrouillage") { UnlockScreen(null, "Mot de passe incorrect.", false, null, { null }, {}, {}) }
 		render("vague") { KeyScreen(inGlow = 0.35f) { HeroTitle("Déverrouillez\n", "votre ", "coffre.") } }
+	}
+
+	/*
+		Réglages du coffre (emplacement choisi, suppression), avec un vrai
+		coffre rangé hors de l'emplacement par défaut.
+	*/
+	@Test
+	fun renderVaultSettings()
+	{
+		val vRoot       = kotlin.io.path.createTempDirectory("keeplus").toFile()					// dossier d'essai
+		val vStore      = VaultStore(fr.maubin.keeplus.vault.VaultLocation(File(vRoot, "appli/coffre.kdbx"), File(vRoot, "appli/emplacement.txt")))	// coffre d'essai
+		val vController = AppController(vStore, { null })											// appli
+		runBlocking {
+			vController.open(vController.create("Perso", "un mot de passe solide")!!)
+			vStore.moveTo(File(vRoot, "Documents/KeePlus"))
+		}
+		val vShown      = AppController(vStore, { null })											// appli relancée : emplacement relu
+		render("reglages-coffre") {
+			androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.padding(20.dp)) { VaultSettings(vShown) }
+		}
 	}
 
 	/*

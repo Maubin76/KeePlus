@@ -19,6 +19,7 @@ val kPasswordChoices  = listOf(24, 48, 168, 0)											// fréquences du mot d
 	clipboardSeconds : un secret copié est effacé du presse-papiers après ce délai
 	passwordHours    : avec l'empreinte, le mot de passe maître est redemandé
 	                   après ce nombre d'heures sans l'avoir saisi (0 : jamais)
+	quickHotkey      : PC : raccourci global de la carte de saisie (« Ctrl+Shift+Space »)
 	updates          : nouvelle version cherchée au lancement
 	ignoredUpdate    : version que l'utilisateur ne veut plus se voir proposer ; vide sans
 */
@@ -28,6 +29,7 @@ data class KeeSettings(
 	val hiddenSeconds    : Int     = 60,
 	val clipboardSeconds : Int     = 30,
 	val passwordHours    : Int     = 168,
+	val quickHotkey      : String  = "Ctrl+Shift+Space",
 	val updates          : Boolean = true,
 	val ignoredUpdate    : String  = ""
 )

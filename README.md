@@ -19,23 +19,8 @@
 </p>
 
 <p align="center">
-  <img src="doc/images/vitrine-pc-coffre.png" alt="KeePlus sur le PC : groupes, liste des entrées et fiche" width="100%">
+  <img src="doc/images/vitrine-telephone.png" alt="KeePlus sur le téléphone : la liste du coffre et l'écran de déverrouillage" width="100%">
 </p>
-
-<table>
-  <tr>
-    <td width="25%"><img src="doc/images/telephone-deverrouillage.png" alt="Déverrouillage par empreinte ou mot de passe maître"></td>
-    <td width="25%"><img src="doc/images/telephone-liste.png" alt="Liste des entrées, recherche et groupes"></td>
-    <td width="25%"><img src="doc/images/telephone-fiche.png" alt="Fiche d'une entrée"></td>
-    <td width="25%"><img src="doc/images/telephone-generateur.png" alt="Générateur de mots de passe"></td>
-  </tr>
-  <tr>
-    <td align="center"><sub>Déverrouillage</sub></td>
-    <td align="center"><sub>Recherche et groupes</sub></td>
-    <td align="center"><sub>Fiche</sub></td>
-    <td align="center"><sub>Générateur</sub></td>
-  </tr>
-</table>
 
 ## En bref
 
@@ -45,29 +30,76 @@ sur votre téléphone et retrouvez sur votre PC.
 - **Chez vous, et seulement chez vous** : le coffre ne quitte jamais vos appareils. Le
   téléphone et le PC se synchronisent **directement par le Wi-Fi de la maison**, sans
   serveur ni service en ligne.
+- **Là où vous vous connectez** : sur le téléphone, KeePlus remplit les formulaires des
+  applis et des sites ; sur le PC, un raccourci fait descendre une carte qui met vos
+  comptes sous la main.
 - **Au format KeePass** : le coffre est un fichier KDBX 4 standard. Vous pouvez l'ouvrir
   avec KeePassXC ou KeePassDX, et reprendre le vôtre dans KeePlus en deux gestes. Vos
   données ne sont jamais prisonnières.
-- **Rapide au quotidien** : recherche instantanée, copie du mot de passe d'un geste,
-  déverrouillage par empreinte.
 - **Prudent par défaut** : verrouillage automatique, presse-papiers effacé après 30 s,
   écran protégé des captures, sauvegarde quotidienne du coffre chiffré.
 
-## Fonctionnalités
+## Auto-remplissage sur le téléphone
+
+<p align="center">
+  <img src="doc/images/telephone-auto-remplissage.png" alt="Auto-remplissage : pastille au-dessus du clavier, choix du compte, création d'un compte" width="100%">
+</p>
+
+Touchez un champ de connexion : KeePlus se propose au-dessus du clavier. Une petite carte
+descend du haut de l'écran, par-dessus l'appli, et c'est tout.
+
+- **Connexion** : les comptes de l'appli ou du site s'affichent ; quand il y en a
+  plusieurs, l'identifiant passe en avant pour choisir le bon.
+- **Inscription** : identifiant proposé et mot de passe généré, de la longueur voulue,
+  remplis puis enregistrés dans le coffre.
+- **Changement de mot de passe** : mot de passe actuel repris du coffre, nouveau mot de
+  passe généré, entrée mise à jour ; l'ancien reste dans l'historique.
+- **Identifiants tapés à la main** : Android propose de les enregistrer, KeePlus crée
+  l'entrée ou la met à jour.
+- **Sûr** : rien n'est rempli sans votre appui, et un site n'obtient que ses propres
+  comptes. Fonctionne dans les applis, Chrome, Brave, Firefox, Edge et Samsung Internet.
+
+## Saisie rapide sur le PC
+
+<p align="center">
+  <img src="doc/images/pc-saisie-rapide.png" alt="La carte de saisie, en haut de l'écran, au-dessus d'une page de connexion" width="100%">
+</p>
+
+Dans n'importe quelle appli ou page de connexion, **Ctrl + Maj + Espace** (réglable) fait
+descendre une carte du haut de l'écran. Elle reconnaît le site (lu dans la barre
+d'adresse) ou l'appli, et propose **Connexion**, **Inscription** ou **Changer**.
+
+Un **Ctrl + C** prépare tout : le **Ctrl + V** suivant colle l'identifiant, le suivant le
+mot de passe (et, pour un changement, le mot de passe actuel puis le nouveau). Les secrets
+restent hors de l'historique du presse-papiers de Windows et s'effacent d'eux-mêmes.
+
+## Au quotidien
+
+<p align="center">
+  <img src="doc/images/telephone-ecrans.png" alt="Fiche d'une entrée, générateur de mots de passe, réglages" width="100%">
+</p>
+
+<p align="center">
+  <img src="doc/images/vitrine-pc.png" alt="KeePlus sur le PC : groupes, liste des entrées et fiche" width="100%">
+</p>
 
 | Fonctionnalité | Description | Android | PC |
 |---|---|:---:|:---:|
 | **Coffre KeePass** | Format KDBX 4 (Argon2id, AES-256), compatible KeePassXC et KeePassDX | ✅ | ✅ |
 | **Reprendre un coffre existant** | Un fichier `.kdbx` de KeePassXC ou KeePassDX devient le coffre de l'appareil | ✅ | ✅ |
+| **Auto-remplissage** | Connexion, inscription, changement de mot de passe, enregistrement des saisies | ✅ | — |
+| **Saisie rapide** | Carte appelée par un raccourci global, presse-papiers enchaîné | — | ✅ |
 | **Recherche** | Instantanée, sans tenir compte des majuscules ni des accents | ✅ | ✅ |
 | **Groupes et corbeille** | Rangement par groupe, corbeille avec restauration, suppression définitive | ✅ | ✅ |
 | **Fiche** | Identifiant, mot de passe, site, notes, champs libres secrets ou non, anciennes versions | ✅ | ✅ |
 | **Générateur** | Mots de passe ou phrases de passe, réglables, avec leur force | ✅ | ✅ |
-| **Copie sécurisée** | Presse-papiers effacé après 15, 30 ou 60 s, marqué sensible sur Android 13+ | ✅ | ✅ |
-| **Empreinte** | Déverrouillage biométrique, clé protégée par le Keystore d'Android | ✅ | — |
+| **Copie sécurisée** | Presse-papiers effacé après 15, 30 ou 60 s, exclu de l'historique | ✅ | ✅ |
+| **Empreinte** | Déverrouillage biométrique ; mot de passe maître redemandé toutes les 24 h, 48 h ou chaque semaine | ✅ | — |
 | **Verrouillage automatique** | Après inactivité, en arrière-plan, à l'extinction de l'écran ou au verrouillage de Windows | ✅ | ✅ |
 | **Synchronisation Wi-Fi** | Appairage par QR code, échanges chiffrés sur le réseau de la maison seulement | ✅ | ✅ |
 | **Sauvegardes** | Copie quotidienne du coffre chiffré, restauration en un clic | ✅ | ✅ |
+| **Emplacement du coffre** | Coffre rangé dans le dossier de votre choix (clé USB, carte SD…), déplacé sans risque | ✅ | ✅ |
+| **Suppression du coffre** | Coffre et sauvegardes effacés de l'appareil, après le mot de passe maître | ✅ | ✅ |
 | **Export** | Copie du coffre chiffré vers le fichier de votre choix | ✅ | — |
 | **Mises à jour** | Nouvelle version proposée, vérifiée et installée par l'appli | ✅ | ✅ |
 | **Zone de notification** | L'appli reste près de l'horloge, prête pour le téléphone ; démarrage avec Windows au choix | — | ✅ |
@@ -95,19 +127,18 @@ flowchart LR
 - **Un seul appareil a changé ?** L'autre reprend son coffre, même verrouillé.
 - **Les deux ont changé ?** Le téléphone fusionne entrée par entrée au déverrouillage : la
   version la plus récente gagne, l'autre rejoint l'historique de l'entrée. Rien n'est perdu.
+- **À la demande** : « Synchroniser maintenant », sur le téléphone ou sur le PC (qui appelle
+  le téléphone où KeePlus est ouvert), fait l'aller-retour complet et dit si les deux coffres
+  sont identiques.
 - **Le téléphone fait le relais** : il porte les modifications d'un PC à l'autre.
 - **Seulement à la maison** : hors des réseaux enregistrés, rien n'est tenté, et le PC
   n'écoute pas.
 
 ## Une ouverture qui a du poids
 
-<table>
-  <tr>
-    <td width="33%"><img src="doc/images/ouverture-1.png" alt="Le bouclier arrive au-dessus de la plaque de métal"></td>
-    <td width="33%"><img src="doc/images/ouverture-2.png" alt="Impact du bouclier sur la plaque"></td>
-    <td width="33%"><img src="doc/images/ouverture-3.png" alt="Logo formé, gravé dans le métal"></td>
-  </tr>
-</table>
+<p align="center">
+  <img src="doc/images/ouverture.png" alt="L'animation d'ouverture : le bouclier tombe, s'écrase et se grave dans la plaque de métal" width="100%">
+</p>
 
 Au lancement sur Android, l'écran devient une plaque d'aluminium brossé ; le bouclier
 tombe, s'écrase avec une vibration sourde et se grave dans le métal, puis laisse place
@@ -122,8 +153,9 @@ Le détail, expliqué sans prérequis et en schémas : [**la cryptographie de Ke
 | **Chiffrement du coffre** | KDBX 4 : clé dérivée par Argon2id (64 Mio), contenu chiffré en AES-256 |
 | **Mot de passe maître** | Jamais enregistré ; un mot de passe faible est refusé à la création |
 | **Empreinte** | Mot de passe chiffré par une clé du Keystore, utilisable seulement après une empreinte forte, invalidée si une empreinte est ajoutée |
+| **Auto-remplissage** | Aucune valeur transmise avant votre appui ; le domaine d'un site n'est cru que s'il vient d'un navigateur connu |
 | **Écran** | Captures et aperçu dans les applis récentes interdits (Android) |
-| **Presse-papiers** | Secrets marqués sensibles et effacés après un délai réglable |
+| **Presse-papiers** | Secrets marqués sensibles, exclus de l'historique et de la synchronisation de Windows, effacés après un délai réglable |
 | **Verrouillage** | Inactivité, arrière-plan, extinction de l'écran, verrouillage de la session Windows |
 | **Synchronisation** | Réseau local de la maison uniquement, appairage par QR code valable 5 minutes, messages scellés en AES-GCM, protection contre le rejeu |
 | **Écritures** | Fichier écrit à part, relu, puis substitué : un coffre n'est jamais laissé à moitié écrit, et un coffre arrivé d'un autre appareil n'est jamais écrasé |
@@ -134,7 +166,9 @@ Le détail, expliqué sans prérequis et en schémas : [**la cryptographie de Ke
 Téléchargez les fichiers de la [dernière release](https://github.com/Maubin76/KeePlus/releases/latest) :
 
 - **Android** : `KeePlus-X.Y.apk`, à ouvrir sur le téléphone (Android autorise une fois
-  l'installation depuis votre navigateur ou gestionnaire de fichiers).
+  l'installation depuis votre navigateur ou gestionnaire de fichiers). Pour
+  l'auto-remplissage : Réglages de KeePlus › « Activer l'auto-remplissage » ; dans Chrome
+  ou Brave, choisissez aussi « Saisie automatique avec un autre service ».
 - **Windows** : `KeePlus-X.Y-windows.zip`, à décompresser où vous voulez, puis lancer
   `KeePlus.exe`. Aucune installation ni droit administrateur : la JVM est incluse.
 
@@ -148,24 +182,25 @@ au téléphone et au PC.
 
 | Module | Rôle |
 |---|---|
-| `core` | Coffre KDBX (via [kotpass](https://github.com/keemobile/kotpass)), fusion, générateur, synchronisation, mises à jour (JVM pur) |
+| `core` | Coffre KDBX (via [kotpass](https://github.com/keemobile/kotpass)), fusion, générateur, synchronisation, reconnaissance des formulaires, mises à jour (JVM pur) |
 | `ui` | Interface commune : thème, logo, écrans, contrôleur de l'appli |
-| `app` | Appli Android : empreinte, synchronisation en tâche de fond, scan du QR code |
-| `desktop` | Appli Windows : zone de notification, appairage, mise à jour du dossier portable |
+| `app` | Appli Android : empreinte, auto-remplissage, synchronisation en tâche de fond, scan du QR code |
+| `desktop` | Appli Windows : zone de notification, carte de saisie, appairage, mise à jour du dossier portable |
+| `demo` | « Démo Connexion », appli tierce (inscription, connexion, changement de mot de passe) pour essayer l'auto-remplissage |
 
 ```bash
 bash ci/polices.sh                    # polices Satoshi (non versionnées, voir plus bas)
 ./gradlew :core:test :desktop:test    # tests
 ./gradlew :desktop:run                # appli PC
-./gradlew :app:installDebug           # appli Android sur le téléphone branché (+ appli Démo Connexion)
+./gradlew :app:installDebug           # appli Android sur le téléphone branché (+ Démo Connexion)
 ./gradlew :desktop:packageZip         # dossier portable Windows (JDK avec jpackage)
 ```
 
 - **CI** : à chaque push sur `main`, tous les tests, puis APK signé, appli PC portable et
   release GitHub, avec un numéro de version augmenté automatiquement.
-- **Captures de ce README** : `KEEPLUS_CAPTURES=1 ./gradlew :desktop:test --tests "*ReadmeScreenshotsTest*"`.
-- **Auto-remplissage** : chaque build debug installe aussi `demo/`, « Démo Connexion », une appli tierce
-  (création de compte, connexion, changement de mot de passe) pour essayer KeePlus.
+- **Visuels de ce README** : captures brutes avec
+  `KEEPLUS_CAPTURES=1 ./gradlew :desktop:test --tests "*ReadmeScreenshotsTest*"` (et captures
+  de l'émulateur pour le téléphone), puis `python ci/vitrines.py` les pose dans leurs cadres.
 - **Logo** : dessiné dans `ui/.../theme/Logo.kt` ; `LogoAssetsTest` régénère les icônes.
 - **Direction artistique** : [`DESIGN.md`](DESIGN.md) ; intentions du produit : [`PRODUCT.md`](PRODUCT.md).
 

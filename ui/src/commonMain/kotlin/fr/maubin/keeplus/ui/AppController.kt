@@ -45,6 +45,20 @@ fun interface VaultFiles
 		Demande à l'utilisateur de choisir un coffre .kdbx ; null s'il annule.
 	*/
 	suspend fun pickVault(): PickedFile?
+
+	/*
+		Demande à l'utilisateur de choisir un dossier (emplacement du coffre) ;
+		null s'il annule ou si la plateforme ne le permet pas. Lève une
+		exception, avec un message à afficher, si l'accès est refusé.
+	*/
+	suspend fun pickFolder(): java.io.File? = null
+
+	/*
+		Nom d'un dossier pour l'affichage (« Stockage privé de KeePlus » plutôt
+		qu'un chemin interne, par exemple).
+		inFolder : dossier
+	*/
+	fun folderLabel(inFolder: java.io.File): String = inFolder.path
 }
 
 const val kIdleMillis   = 5 * 60 * 1000L											// verrouillage après 5 min sans geste
@@ -412,6 +426,97 @@ class AppController(
 				saving = false
 			}
 		}
+	}
+
+	/*
+		Appelé après la suppression du coffre : la plateforme oublie les
+		appareils appairés (sinon la synchronisation ramènerait le coffre).
+	*/
+	var onDeleted: () -> Unit = {}
+
+	/*
+		Chemin du fichier du coffre, pour l'affichage.
+	*/
+	var vaultPath: String by mutableStateOf(fStore.file.absolutePath)
+		private set
+
+	/*
+		Dossier du coffre, tel qu'affiché.
+	*/
+	val vaultFolder: String get() = java.io.File(vaultPath).parentFile?.let(fFiles::folderLabel) ?: vaultPath
+
+	/*
+		Vrai si le coffre est ailleurs qu'à l'emplacement par défaut.
+	*/
+	val vaultCustom: Boolean get() = vaultPath.let { fStore.fLocation.custom }
+
+	/*
+		Vrai si l'emplacement du coffre peut être choisi.
+	*/
+	val vaultMovable: Boolean get() = fStore.fLocation.movable
+
+	/*
+		Fait choisir un dossier, puis y déplace le coffre (ou y placera le
+		futur coffre, ou y trouve un coffre KeePlus à ouvrir) ; rend null si
+		c'est fait ou annulé, sinon la raison.
+	*/
+	suspend fun chooseVaultFolder(): String?
+	{
+		val vFolder = try
+		{
+			fFiles.pickFolder()
+		}
+		catch (vError: Exception)
+		{
+			return vError.message ?: "Dossier inaccessible."
+		} ?: return null																	// dossier choisi
+		return moveVault(vFolder)
+	}
+
+	/*
+		Remet le coffre à son emplacement par défaut ; null si c'est fait,
+		sinon la raison.
+	*/
+	suspend fun resetVaultFolder(): String? = moveVault(fStore.fLocation.defaultFolder)
+
+	/*
+		Déplace le coffre dans un dossier, entre deux écritures.
+		inFolder : dossier
+	*/
+	private suspend fun moveVault(inFolder: java.io.File): String? = fSaveLock.withLock {
+		val vFailure = withContext(Dispatchers.IO) { fStore.moveTo(inFolder) }				// raison d'un échec
+		vaultPath = fStore.file.absolutePath
+		if (screen == AppScreen.Welcome && fStore.exists()) screen = AppScreen.Locked
+		vFailure
+	}
+
+	/*
+		Supprime le coffre de l'appareil et ses sauvegardes, après contrôle du
+		mot de passe maître ; l'empreinte est désactivée, les appareils
+		appairés oubliés, et l'appli revient à l'accueil. Rend null si c'est
+		fait, sinon la raison.
+		inPassword : mot de passe maître
+	*/
+	suspend fun deleteVault(inPassword: CharSequence): String?
+	{
+		val vOpened = screen as? AppScreen.Opened ?: return "Coffre verrouillé."				// coffre ouvert
+		if (vOpened.demo) return "Pas de suppression en démonstration."
+		if (!vOpened.vault.isMasterPassword(inPassword)) return "Mot de passe maître incorrect."
+		fSaveLock.withLock {
+			try
+			{
+				withContext(Dispatchers.IO) { fStore.delete() }
+			}
+			catch (vError: Exception)
+			{
+				return "Suppression impossible : ${vError.message ?: vError::class.simpleName}"
+			}
+		}
+		fBiometric?.let { it.disable(); it.resetOffer() }
+		runCatching { onDeleted() }
+		lock()
+		screen = AppScreen.Welcome
+		return null
 	}
 
 	/*

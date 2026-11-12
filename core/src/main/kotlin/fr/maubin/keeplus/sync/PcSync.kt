@@ -1,6 +1,9 @@
 package fr.maubin.keeplus.sync
 
 import fr.maubin.keeplus.link.Beacon
+import fr.maubin.keeplus.link.broadcastAddresses
+import fr.maubin.keeplus.link.callPhones as sendCall
+import fr.maubin.keeplus.link.kCallPort
 import fr.maubin.keeplus.link.DeviceInfo
 import fr.maubin.keeplus.link.DiscoveryResponder
 import fr.maubin.keeplus.link.LinkCall
@@ -55,6 +58,17 @@ data class PcPeers(
 )
 
 /*
+	Dernier échange d'un téléphone avec ce PC (depuis le lancement).
+	at       : instant (ms)
+	upToDate : vrai si les deux coffres sont identiques après l'échange ;
+	           faux si le téléphone doit encore fusionner celui du PC
+*/
+data class PhoneExchange(
+	val at       : Long,
+	val upToDate : Boolean
+)
+
+/*
 	État de la synchronisation du PC.
 	running  : serveur à l'écoute
 	onHome   : PC sur le réseau familial
@@ -64,6 +78,7 @@ data class PcPeers(
 	offer    : offre d'appairage affichée (QR code) ; null sans
 	paired   : téléphone appairé à l'instant (message) ; null sans
 	error    : échec du démarrage ; null sinon
+	last     : dernier échange de chaque téléphone, par identifiant
 */
 data class PcSyncState(
 	val running  : Boolean           = false,
@@ -73,7 +88,8 @@ data class PcSyncState(
 	val phones   : List<PairedPhone> = emptyList(),
 	val offer    : PairingOffer?     = null,
 	val paired   : String?           = null,
-	val error    : String?           = null
+	val error    : String?           = null,
+	val last     : Map<String, PhoneExchange> = emptyMap()
 )
 
 /*
@@ -161,6 +177,21 @@ class PcSync(
 	{
 		fState.update { it.copy(offer = null) }
 		refresh()
+	}
+
+	/*
+		Appelle les téléphones appairés : ceux qui ont KeePlus ouvert à l'écran
+		se synchronisent aussitôt (voir callPhones). Rend faux si le PC
+		n'écoute pas (hors du réseau de la maison) : un téléphone ne pourrait
+		pas le joindre.
+		inPort : port d'écoute des téléphones
+	*/
+	fun callPhones(inPort: Int = kCallPort): Boolean
+	{
+		if (fServer == null) return false
+		val vPhones = fState.value.phones.mapNotNull { vPhone -> vPhone.lastAddress?.let { runCatching { InetAddress.getByName(it) }.getOrNull() } }	// dernières adresses connues
+		sendCall(info().id, broadcastAddresses() + vPhones, inPort)
+		return true
 	}
 
 	/*
@@ -254,6 +285,7 @@ class PcSync(
 		if (vRequest.op != kOpSync) return reply(SyncReply(kActRefused, message = "demande « ${vRequest.op} » inconnue"))
 		val vReply   = answerSync(fVault, vRequest)												// décision
 		if (vReply.action != kActRefused) seen(vPhone.id, inCall.address.hostAddress)
+		if (vReply.action != kActRefused) fState.update { it.copy(last = it.last + (vPhone.id to PhoneExchange(fNow(), vReply.action != kActMerge))) }
 		if (vReply.action == kActStored) fOnStored(vPhone.name)
 		return reply(vReply)
 	}

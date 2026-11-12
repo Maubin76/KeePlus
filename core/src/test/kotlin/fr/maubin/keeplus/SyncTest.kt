@@ -1,5 +1,7 @@
 package fr.maubin.keeplus
 
+import fr.maubin.keeplus.link.callPhones
+import fr.maubin.keeplus.link.SyncCallListener
 import fr.maubin.keeplus.link.NetworkId
 import fr.maubin.keeplus.link.toBase64
 import fr.maubin.keeplus.sync.PcSync
@@ -26,6 +28,7 @@ import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -172,6 +175,7 @@ class SyncTest
 		assertNull(vPhoneStore.save(vPhoneVault))
 		vReport = vPhone.syncAll { emptyList() }
 		assertTrue(vReport.pending)
+		assertFalse(vPc.state.value.last.values.single().upToDate)
 		val vPending = vPhone.pending().single()													// coffre du PC à fusionner
 		val vMerged  = Vault(mergeVaults(vPhoneVault.database, decodeVault(vPending.bytes, vPhoneVault.database.credentials)).database)	// fusion
 		assertNull(vPhoneStore.save(vMerged))
@@ -180,6 +184,33 @@ class SyncTest
 		assertTrue(!vReport.pending && vReport.errors.isEmpty())
 		assertEquals(listOf("Amazon", "Gmail", "Impôts", "Netflix", "Steam"), titles(vPcStore))
 		assertArrayEquals(vPcStore.read(), vPhoneStore.read())
+		assertTrue(vPc.state.value.last.values.single().upToDate)
+	}
+
+	/*
+		Appel du PC : le téléphone à l'écoute reçoit l'identifiant du PC ; un
+		message étranger est ignoré.
+	*/
+	@Test
+	fun callReachesPhone()
+	{
+		val vCalls    = java.util.concurrent.LinkedBlockingQueue<String>()							// appels reçus
+		val vListener = SyncCallListener { vCalls.add(it) }										// téléphone à l'écoute
+		vListener.start(0, InetAddress.getLoopbackAddress())
+		try
+		{
+			java.net.DatagramSocket().use { vSocket ->
+				val vJunk = "KEEPLUS?1".toByteArray()													// demande de découverte, pas un appel
+				vSocket.send(java.net.DatagramPacket(vJunk, vJunk.size, InetAddress.getLoopbackAddress(), vListener.port))
+			}
+			callPhones("pc-42", listOf(InetAddress.getLoopbackAddress()), vListener.port, inRepeat = 1)
+			assertEquals("pc-42", vCalls.poll(2, java.util.concurrent.TimeUnit.SECONDS))
+			assertNull(vCalls.poll(300, java.util.concurrent.TimeUnit.MILLISECONDS))
+		}
+		finally
+		{
+			vListener.stop()
+		}
 	}
 
 	/*
