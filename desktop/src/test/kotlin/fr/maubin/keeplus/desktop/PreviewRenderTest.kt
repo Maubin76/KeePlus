@@ -114,6 +114,30 @@ class PreviewRenderTest
 	}
 
 	/*
+		Mot de passe généré des cartes de saisie, à plusieurs longueurs : il
+		reste sur une ligne, en caractères plus petits quand il s'allonge.
+	*/
+	@Test
+	fun renderGeneratedPasswords()
+	{
+		val vDir   = File("build/previews").apply { mkdirs() }								// dossier des rendus
+		val vChars = "aB3\$kP9#mQ2!xZ7&"															// caractères variés
+		ImageComposeScene(380, 560) {
+			KeePlusTheme {
+				androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.padding(16.dp), verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)) {
+					for (vLength in listOf(12, 20, 32, 64))
+					{
+						fr.maubin.keeplus.ui.components.GeneratedPassword("Mot de passe ($vLength)", vChars.repeat(5).take(vLength), vLength, {}, {})
+					}
+				}
+			}
+		}.use { vScene ->
+			vScene.render()
+			File(vDir, "mot-de-passe-genere.png").writeBytes(vScene.render(1_000_000_000L).encodeToData(EncodedImageFormat.PNG)!!.bytes)
+		}
+	}
+
+	/*
 		Réglages du coffre (emplacement choisi, suppression), avec un vrai
 		coffre rangé hors de l'emplacement par défaut.
 	*/
